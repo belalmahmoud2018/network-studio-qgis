@@ -1,0 +1,18 @@
+[general]
+name=Network Studio
+qgisMinimumVersion=3.28
+supportsQt6=True
+description=Utility network tools for QGIS: water, sewer, storm, gas, electricity, fiber, telecom, district cooling and roads, in GeoPackage, SpatiaLite and File Geodatabase.
+about=Choose the network type first and Network Studio creates the classes, asset groups, asset types and connectivity rules for it. Import your existing layers with automatic asset group matching, prepare the network (close gaps, add missing vertices), validate it (dangles, gaps, missing vertices, rule violations, islands without a source), trace it (connected, upstream, downstream, isolation with the valves / switches to close, shortest path, loops, subnetwork), update subnetworks, create containment / attachment associations and draw service connections to customers automatically. Everything is stored inside the data file. Asset groups and types are also written for the Subtypes and Domains Manager plugin. Concepts follow the ArcGIS utility network; the network itself works in QGIS only.
+version=1.0.0
+author=Belal Mahmoud Abdelmonem
+email=belal.ma7moud@gmail.com
+changelog=1.0.0 - First stable release. 0.6.0 - ArcGIS asset package export (+ ArcPy subtype script) and import of its associations / controllers; several domain networks in one file with a shared structure network; isolation no longer crosses the valve at the end of the broken pipe; criticality in linear time (exact, verified); no false 'more than one controller' errors for systems without tiers; much faster saving and service connections on large networks; EPANET export leaves out parts without a source; tested on a 37,500 feature water network on real San Francisco streets. 0.5.0 - PostgreSQL / PostGIS (multi-user); import from ArcGIS (utility network classes, associations, Network Analyst streets with elevation levels); grade-separated connectivity; EPANET results on the map; web publishing for QGIS Server / Lizmap; tested on 54,113 real San Francisco streets. 0.4.0 - Pages ordered by project steps; demo networks for every type; company branding; asset ID generator and bulk field calculator; extra quality checks (E17-E20); criticality and risk with renewal priorities; cost estimate; sewer longitudinal profiles; edit history with old and new values; professional SVG symbols. 0.3.0 - Dashboard and QA report; work orders; automatic backups; recent networks; field (QField) project; data dictionary; network diagrams; upstream through all loop paths; map book with atlas and PDF. 0.2.0 - Sidebar with 12 pages; Model editor (groups, types, categories, tiers, terminals, network attributes, rules, required fields); smart editing; editor tracking; dirty areas; topology enable/disable; exceptions; verify; associations page; subnetwork controllers; is connected; export subnetwork; trace conditions, saved / imported configurations, snapping, selection as locations, Excel export; reports and bill of quantities; EPANET and SWMM export. 0.1.1 - Opens as its own floating window (like the other plugins); English-only interface. 0.1.0 - First version: network type templates, import, prepare, validate, traces, subnetworks, associations, service connections.
+tags=utility network,network,water,sewer,electricity,gas,fiber,telecom,roads,trace,topology,geopackage,spatialite,geodatabase
+category=Vector
+homepage=https://github.com/belalmahmoud2018/network-studio-qgis
+repository=https://github.com/belalmahmoud2018/network-studio-qgis
+tracker=https://github.com/belalmahmoud2018/network-studio-qgis/issues
+icon=icon.png
+experimental=False
+deprecated=False
