@@ -45,6 +45,7 @@ class NetworkStudioPlugin:
         """Open the window (floating, non-modal) or bring it to the front."""
         if self.dock is None:
             from .dock import NetworkDock
+
             self.dock = NetworkDock(self.iface)
         self.dock.show()
         self.dock.raise_()

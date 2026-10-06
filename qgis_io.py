@@ -1,12 +1,26 @@
-"""QGIS side of the plugin: layers, forms, styles, reading the network, writing results."""
+"""QGIS side of the plugin: layers, forms, styles, reading the network, writing
+results."""
+
 import os
 import random
 from datetime import datetime
 
 from qgis.core import (
-    Qgis, QgsCategorizedSymbolRenderer, QgsDefaultValue, QgsEditorWidgetSetup, QgsFeature,
-    QgsFeatureRequest, QgsGeometry, QgsMarkerSymbol, QgsMessageLog,
-    QgsPointXY, QgsProject, QgsRendererCategory, QgsSymbol, QgsVectorLayer, QgsWkbTypes,
+    Qgis,
+    QgsCategorizedSymbolRenderer,
+    QgsDefaultValue,
+    QgsEditorWidgetSetup,
+    QgsFeature,
+    QgsFeatureRequest,
+    QgsGeometry,
+    QgsMarkerSymbol,
+    QgsMessageLog,
+    QgsPointXY,
+    QgsProject,
+    QgsRendererCategory,
+    QgsSymbol,
+    QgsVectorLayer,
+    QgsWkbTypes,
 )
 from qgis.PyQt.QtGui import QColor
 
@@ -26,7 +40,11 @@ def log(msg, warning=False):
 
 
 def gkind(layer_or_geom):
-    v = layer_or_geom.geometryType() if hasattr(layer_or_geom, "geometryType") else layer_or_geom.type()
+    v = (
+        layer_or_geom.geometryType()
+        if hasattr(layer_or_geom, "geometryType")
+        else layer_or_geom.type()
+    )
     try:
         v = int(v)
     except TypeError:
@@ -38,7 +56,10 @@ def _norm(path):
     path = S.split_domain(path)[0]
     if S.is_pg(path):
         p = S.pg_parts(path)
-        return "PG:" + "|".join("%s=%s" % (k, p.get(k, "")) for k in ("host", "port", "dbname", "active_schema"))
+        return "PG:" + "|".join(
+            "%s=%s" % (k, p.get(k, ""))
+            for k in ("host", "port", "dbname", "active_schema")
+        )
     return os.path.normcase(os.path.abspath(path.rstrip("/\\")))
 
 
@@ -53,13 +74,21 @@ def layer_source(layer):
 
 
 def project_layer(path, name):
-    """A layer of the current project pointing at `path|layername=name`, or None."""
+    """A layer of the current project pointing at `path|layername=name`, or
+    None."""
     name = S.table_name(path, name)
     for lyr in QgsProject.instance().mapLayers().values():
-        if not isinstance(lyr, QgsVectorLayer) or lyr.providerType() not in ("ogr", "spatialite"):
+        if not isinstance(lyr, QgsVectorLayer) or lyr.providerType() not in (
+            "ogr",
+            "spatialite",
+        ):
             continue
         p, n = layer_source(lyr)
-        if n and n.lower().split(".")[-1] == name.lower() and _norm(p) == _norm(path):
+        if (
+            n
+            and n.lower().split(".")[-1] == name.lower()
+            and _norm(p) == _norm(path)
+        ):
             return lyr
     return None
 
@@ -68,14 +97,16 @@ _CACHE = {}
 
 
 def clear_cache(path=None):
-    """Forget the layers opened outside the project (after schema changes or file replacement)."""
+    """Forget the layers opened outside the project (after schema changes or
+    file replacement)."""
     for k in list(_CACHE):
         if path is None or k[0] == _norm(path):
             _CACHE.pop(k, None)
 
 
 def get_layer(path, name, add=False):
-    """Project layer when loaded, otherwise one cached layer per table (a single file handle each)."""
+    """Project layer when loaded, otherwise one cached layer per table (a
+    single file handle each)."""
     lyr = project_layer(path, name)
     if lyr is not None:
         return lyr
@@ -97,7 +128,8 @@ def get_layer(path, name, add=False):
 
 
 def class_layers(cfg):
-    """{role: QgsVectorLayer} for every class of the network (project layer if loaded)."""
+    """{role: QgsVectorLayer} for every class of the network (project layer if
+    loaded)."""
     out = {}
     for role, cls in cfg.classes.items():
         try:
@@ -109,13 +141,21 @@ def class_layers(cfg):
 
 # ------------------------------------------------------------------ loading
 def load_network(cfg, iface=None):
-    """Add the classes, the error layers and the asset type lookup to the project."""
+    """Add the classes, the error layers and the asset type lookup to the
+    project."""
     clear_cache(cfg.path)
     root = QgsProject.instance().layerTreeRoot()
     title = cfg.settings.get("name") or cfg.tpl["label"]
     group = root.findGroup(title) or root.insertGroup(0, title)
-    order = ["Device", "Junction", "Line", "Assembly", "StructureJunction", "StructureLine",
-             "StructureBoundary"]
+    order = [
+        "Device",
+        "Junction",
+        "Line",
+        "Assembly",
+        "StructureJunction",
+        "StructureLine",
+        "StructureBoundary",
+    ]
     lookup = get_layer(cfg.path, "un_asset_types")
     if project_layer(cfg.path, "un_asset_types") is None:
         QgsProject.instance().addMapLayer(lookup, False)
@@ -126,17 +166,27 @@ def load_network(cfg, iface=None):
     for name in ("un_errors_point", "un_errors_line"):
         if project_layer(cfg.path, name) is None:
             lyr = get_layer(cfg.path, name)
-            lyr.setName("Errors (%s)" % ("points" if name.endswith("point") else "lines"))
+            lyr.setName(
+                "Errors (%s)"
+                % ("points" if name.endswith("point") else "lines")
+            )
             _style_errors(lyr)
             QgsProject.instance().addMapLayer(lyr, False)
             group.insertLayer(0, lyr)
     if project_layer(cfg.path, "un_work_orders") is None:
         try:
             from . import workorders
+
             wol = workorders.layer(cfg)
             wol.setName("Work orders")
-            sym = QgsMarkerSymbol.createSimple({"name": "diamond", "color": "#ef9f27", "size": "4.5",
-                                                 "outline_color": "#633806"})
+            sym = QgsMarkerSymbol.createSimple(
+                {
+                    "name": "diamond",
+                    "color": "#ef9f27",
+                    "size": "4.5",
+                    "outline_color": "#633806",
+                }
+            )
             wol.renderer().setSymbol(sym)
             QgsProject.instance().addMapLayer(wol, False)
             group.insertLayer(0, wol)
@@ -154,7 +204,8 @@ def load_network(cfg, iface=None):
 
 
 def refresh_forms(cfg):
-    """Re-apply forms and styles to the network layers loaded in the project."""
+    """Re-apply forms and styles to the network layers loaded in the
+    project."""
     lookup = project_layer(cfg.path, "un_asset_types")
     if lookup is not None:
         lookup.dataProvider().reloadData()
@@ -173,53 +224,120 @@ def setup_layer(cfg, role, cls, lyr, lookup=None):
 
     groups = cfg.groups(cls)
     if idx("assetgroup") >= 0:
-        lyr.setEditorWidgetSetup(idx("assetgroup"), QgsEditorWidgetSetup(
-            "ValueMap", {"map": [{name: code} for code, name in groups]}))
-        lyr.setDefaultValueDefinition(idx("assetgroup"), QgsDefaultValue(str(groups[0][0]) if groups else "1"))
+        lyr.setEditorWidgetSetup(
+            idx("assetgroup"),
+            QgsEditorWidgetSetup(
+                "ValueMap", {"map": [{name: code} for code, name in groups]}
+            ),
+        )
+        lyr.setDefaultValueDefinition(
+            idx("assetgroup"),
+            QgsDefaultValue(str(groups[0][0]) if groups else "1"),
+        )
         lyr.setFieldAlias(idx("assetgroup"), "Asset group")
     if idx("assettype") >= 0 and lookup is not None:
-        lyr.setEditorWidgetSetup(idx("assettype"), QgsEditorWidgetSetup("ValueRelation", {
-            "Layer": lookup.id(), "LayerName": lookup.name(), "Key": "at_code", "Value": "at_name",
-            "AllowNull": False, "OrderByValue": False,
-            "FilterExpression": "\"class_name\" = '%s' AND \"ag_code\" = current_value('assetgroup')" % cls,
-        }))
+        lyr.setEditorWidgetSetup(
+            idx("assettype"),
+            QgsEditorWidgetSetup(
+                "ValueRelation",
+                {
+                    "Layer": lookup.id(),
+                    "LayerName": lookup.name(),
+                    "Key": "at_code",
+                    "Value": "at_name",
+                    "AllowNull": False,
+                    "OrderByValue": False,
+                    "FilterExpression": (
+                        "\"class_name\" = '%s' AND \"ag_code\" ="
+                        " current_value('assetgroup')" % cls
+                    ),
+                },
+            ),
+        )
         lyr.setDefaultValueDefinition(idx("assettype"), QgsDefaultValue("1"))
         lyr.setFieldAlias(idx("assettype"), "Asset type")
-    maps = {"lifecyclestatus": (T.LIFECYCLE, "3"), "operatingstatus": (T.OPERATING, "1"),
-            "flowdirection": (T.FLOW_DIRECTION, "1"), "oneway": (T.ONEWAY, "0")}
+    maps = {
+        "lifecyclestatus": (T.LIFECYCLE, "3"),
+        "operatingstatus": (T.OPERATING, "1"),
+        "flowdirection": (T.FLOW_DIRECTION, "1"),
+        "oneway": (T.ONEWAY, "0"),
+    }
     for fname, (values, default) in maps.items():
         if idx(fname) >= 0:
-            lyr.setEditorWidgetSetup(idx(fname), QgsEditorWidgetSetup(
-                "ValueMap", {"map": [{label: code} for code, label in values]}))
+            lyr.setEditorWidgetSetup(
+                idx(fname),
+                QgsEditorWidgetSetup(
+                    "ValueMap",
+                    {"map": [{label: code} for code, label in values]},
+                ),
+            )
             lyr.setDefaultValueDefinition(idx(fname), QgsDefaultValue(default))
-    tracking = (("created_user", "@user_account_name", False), ("created_date", "now()", False),
-                ("last_edited_user", "@user_account_name", True), ("last_edited_date", "now()", True))
+    tracking = (
+        ("created_user", "@user_account_name", False),
+        ("created_date", "now()", False),
+        ("last_edited_user", "@user_account_name", True),
+        ("last_edited_date", "now()", True),
+    )
     for fname, expr, on_update in tracking:
         if idx(fname) >= 0:
-            lyr.setDefaultValueDefinition(idx(fname), QgsDefaultValue(expr, on_update))
-            lyr.setEditorWidgetSetup(idx(fname), QgsEditorWidgetSetup("Hidden", {}))
+            lyr.setDefaultValueDefinition(
+                idx(fname), QgsDefaultValue(expr, on_update)
+            )
+            lyr.setEditorWidgetSetup(
+                idx(fname), QgsEditorWidgetSetup("Hidden", {})
+            )
     if idx("measuredlength") >= 0:
-        lyr.setDefaultValueDefinition(idx("measuredlength"), QgsDefaultValue("round($length, 3)", True))
+        lyr.setDefaultValueDefinition(
+            idx("measuredlength"), QgsDefaultValue("round($length, 3)", True)
+        )
     _style_classes(lyr, groups, role)
 
 
 def _style_classes(lyr, groups, role):
     kind = gkind(lyr)
     cats = []
-    rnd = random.Random(hash(lyr.name()) & 0xFFFF)  # nosec B311 - sample data / symbol colours, not security
+    rnd = random.Random(
+        hash(lyr.name()) & 0xFFFF
+    )  # nosec B311 - sample data / symbol colours, not security
     for code, name in groups:
         sym = QgsSymbol.defaultSymbol(lyr.geometryType())
         sym.setColor(QColor.fromHsv(rnd.randint(0, 359), 200, 200))
         if kind == "line":
             low = name.lower()
-            sym.setWidth(0.35 if any(w in low for w in ("service", "lateral", "drop", "access")) else
-                         0.9 if any(w in low for w in ("transmission", "feeder", "trunk", "highway", "mv ")) else
-                         0.6 if "Structure" not in role else 0.4)
+            sym.setWidth(
+                0.35
+                if any(
+                    w in low for w in ("service", "lateral", "drop", "access")
+                )
+                else (
+                    0.9
+                    if any(
+                        w in low
+                        for w in (
+                            "transmission",
+                            "feeder",
+                            "trunk",
+                            "highway",
+                            "mv ",
+                        )
+                    )
+                    else 0.6 if "Structure" not in role else 0.4
+                )
+            )
         elif kind == "point":
             try:
                 from . import symbols
-                sym = symbols.marker(name, role, sym.color(), 4.2 if role == "Device" else
-                                     2.6 if role == "Junction" else 3.2)
+
+                sym = symbols.marker(
+                    name,
+                    role,
+                    sym.color(),
+                    (
+                        4.2
+                        if role == "Device"
+                        else 2.6 if role == "Junction" else 3.2
+                    ),
+                )
             except Exception as e:
                 log("Symbol: %s" % e, True)
                 sym.setSize(2.6 if role == "Device" else 1.8)
@@ -232,8 +350,15 @@ def _style_classes(lyr, groups, role):
 
 def _style_errors(lyr):
     if gkind(lyr) == "point":
-        sym = QgsMarkerSymbol.createSimple({"name": "cross2", "color": "#e31a1c", "size": "4",
-                                             "outline_color": "#e31a1c", "outline_width": "0.6"})
+        sym = QgsMarkerSymbol.createSimple(
+            {
+                "name": "cross2",
+                "color": "#e31a1c",
+                "size": "4",
+                "outline_color": "#e31a1c",
+                "outline_width": "0.6",
+            }
+        )
     else:
         sym = QgsSymbol.defaultSymbol(lyr.geometryType())
         sym.setColor(QColor("#e31a1c"))
@@ -267,7 +392,9 @@ def _val(f, name):
         return None
     v = f.attribute(i)
     try:
-        return None if v is None or (hasattr(v, "isNull") and v.isNull()) else v
+        return (
+            None if v is None or (hasattr(v, "isNull") and v.isNull()) else v
+        )
     except Exception:
         return v
 
@@ -287,7 +414,8 @@ def _int(v):
 
 
 def read_network(cfg, layers=None, feedback=None):
-    """Build an engine Network from the current content of the class layers (edits included)."""
+    """Build an engine Network from the current content of the class layers
+    (edits included)."""
     layers = layers or class_layers(cfg)
     size_field = cfg.settings.get("size_field") or cfg.tpl["size_field"][0]
     points, lines = [], []
@@ -297,8 +425,11 @@ def read_network(cfg, layers=None, feedback=None):
             continue
         cls = cfg.classes[role]
         has_levels = lyr.fields().indexFromName("f_elev") >= 0
-        attr_fields = [(name, by_cls[cls]) for name, by_cls in cfg.network_attributes.items()
-                       if cls in by_cls and lyr.fields().indexFromName(by_cls[cls]) >= 0]
+        attr_fields = [
+            (name, by_cls[cls])
+            for name, by_cls in cfg.network_attributes.items()
+            if cls in by_cls and lyr.fields().indexFromName(by_cls[cls]) >= 0
+        ]
         for f in lyr.getFeatures():
             g = f.geometry()
             if g is None or g.isNull():
@@ -309,20 +440,51 @@ def read_network(cfg, layers=None, feedback=None):
                 p = _point_of(g)
                 if p is None:
                     continue
-                points.append({"key": (cls, f.id()), "x": p.x(), "y": p.y(), "ag": ag, "at": at,
-                               "closed": _int(_val(f, "operatingstatus")) == 0,
-                               "assetid": _val(f, "assetid"), "lifecycle": _int(_val(f, "lifecyclestatus")),
-                               "attrs": attrs})
+                points.append(
+                    {
+                        "key": (cls, f.id()),
+                        "x": p.x(),
+                        "y": p.y(),
+                        "ag": ag,
+                        "at": at,
+                        "closed": _int(_val(f, "operatingstatus")) == 0,
+                        "assetid": _val(f, "assetid"),
+                        "lifecycle": _int(_val(f, "lifecyclestatus")),
+                        "attrs": attrs,
+                    }
+                )
             else:
-                lines.append({"key": (cls, f.id()), "parts": _lines_of(g), "ag": ag, "at": at,
-                              "reverse": _int(_val(f, "flowdirection")) == 2,
-                              "oneway": _int(_val(f, "oneway")) or 0,
-                              "lifecycle": _int(_val(f, "lifecyclestatus")), "size": _num(_val(f, size_field)),
-                              "attrs": attrs, "levels": (_int(_val(f, "f_elev")), _int(_val(f, "t_elev")))
-                              if has_levels else None})
-    return Network(points, lines, cfg.tolerance, cats=cfg.cats, tiers=cfg.tiers, flow=cfg.flow,
-                   associations=cfg.associations, gap=cfg.gap, terminals=cfg.terminals,
-                   controllers=cfg.controllers, tier_settings=cfg.tier_settings)
+                lines.append(
+                    {
+                        "key": (cls, f.id()),
+                        "parts": _lines_of(g),
+                        "ag": ag,
+                        "at": at,
+                        "reverse": _int(_val(f, "flowdirection")) == 2,
+                        "oneway": _int(_val(f, "oneway")) or 0,
+                        "lifecycle": _int(_val(f, "lifecyclestatus")),
+                        "size": _num(_val(f, size_field)),
+                        "attrs": attrs,
+                        "levels": (
+                            (_int(_val(f, "f_elev")), _int(_val(f, "t_elev")))
+                            if has_levels
+                            else None
+                        ),
+                    }
+                )
+    return Network(
+        points,
+        lines,
+        cfg.tolerance,
+        cats=cfg.cats,
+        tiers=cfg.tiers,
+        flow=cfg.flow,
+        associations=cfg.associations,
+        gap=cfg.gap,
+        terminals=cfg.terminals,
+        controllers=cfg.controllers,
+        tier_settings=cfg.tier_settings,
+    )
 
 
 # ------------------------------------------------------------------ results
@@ -359,17 +521,25 @@ def result_layers(cfg, res, title, layers=None):
     crs = next(iter(layers.values())).crs().authid() if layers else ""
     made = []
     for kind, geom in (("line", "MultiLineString"), ("point", "Point")):
-        mem = QgsVectorLayer("%s?crs=%s&field=class_name:string&field=fid:long&field=assetgroup:string"
-                             % (geom, crs), "%s (%ss)" % (title, kind), "memory")
+        mem = QgsVectorLayer(
+            "%s?crs=%s&field=class_name:string&field=fid:long&field=assetgroup:string"  # noqa: E501
+            % (geom, crs),
+            "%s (%ss)" % (title, kind),
+            "memory",
+        )
         feats = []
         for role, lyr in layers.items():
             cls = cfg.classes[role]
             if gkind(lyr) != kind or cls not in by_cls:
                 continue
-            for f in lyr.getFeatures(QgsFeatureRequest().setFilterFids(by_cls[cls])):
+            for f in lyr.getFeatures(
+                QgsFeatureRequest().setFilterFids(by_cls[cls])
+            ):
                 nf = QgsFeature(mem.fields())
                 nf.setGeometry(f.geometry())
-                nf.setAttributes([cls, f.id(), cfg.label(cls, _int(_val(f, "assetgroup")))])
+                nf.setAttributes(
+                    [cls, f.id(), cfg.label(cls, _int(_val(f, "assetgroup")))]
+                )
                 feats.append(nf)
         if feats:
             mem.dataProvider().addFeatures(feats)
@@ -387,12 +557,19 @@ def result_layers(cfg, res, title, layers=None):
 def write_errors(cfg, issues, areas=None):
     """Replace the content of the error layers with `issues`.
 
-    areas: list of QgsRectangle -> only errors inside these areas are replaced (dirty areas).
+    areas: list of QgsRectangle -> only errors inside these areas are replaced
+    (dirty areas).
     Errors marked as exceptions are left out."""
-    issues = [it for it in issues if (it["code"], it["key"][0], it["key"][1]) not in cfg.exceptions]
+    issues = [
+        it
+        for it in issues
+        if (it["code"], it["key"][0], it["key"][1]) not in cfg.exceptions
+    ]
     if areas:
+
         def inside(x, y):
             return any(r.contains(QgsPointXY(x, y)) for r in areas)
+
         issues = [it for it in issues if inside(it["x"], it["y"])]
     now = datetime.now().isoformat(timespec="seconds")
     layers = class_layers(cfg)
@@ -403,8 +580,14 @@ def write_errors(cfg, issues, areas=None):
         prov = lyr.dataProvider()
         old = list(lyr.getFeatures())
         if areas:
-            old = [f for f in old if f.hasGeometry() and any(
-                r.intersects(f.geometry().boundingBox()) for r in areas)]
+            old = [
+                f
+                for f in old
+                if f.hasGeometry()
+                and any(
+                    r.intersects(f.geometry().boundingBox()) for r in areas
+                )
+            ]
         prov.deleteFeatures([f.id() for f in old])
         feats = []
         want = "line" if name.endswith("line") else "point"
@@ -413,16 +596,30 @@ def write_errors(cfg, issues, areas=None):
                 continue
             f = QgsFeature(lyr.fields())
             if want == "point":
-                f.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(it["x"], it["y"])))
+                f.setGeometry(
+                    QgsGeometry.fromPointXY(QgsPointXY(it["x"], it["y"]))
+                )
             else:
                 src = by_key.get(it["key"][0])
-                feat = next(src.getFeatures(QgsFeatureRequest(it["key"][1])), None) if src else None
+                feat = (
+                    next(
+                        src.getFeatures(QgsFeatureRequest(it["key"][1])), None
+                    )
+                    if src
+                    else None
+                )
                 if feat is None or not feat.hasGeometry():
                     continue
                 f.setGeometry(feat.geometry())
             f.setAttributes([None] * len(lyr.fields()))
-            for fname, v in (("code", it["code"]), ("severity", it["severity"]), ("message", it["message"]),
-                             ("class_name", it["key"][0]), ("feature_fid", it["key"][1]), ("created", now)):
+            for fname, v in (
+                ("code", it["code"]),
+                ("severity", it["severity"]),
+                ("message", it["message"]),
+                ("class_name", it["key"][0]),
+                ("feature_fid", it["key"][1]),
+                ("created", now),
+            ):
                 f.setAttribute(fname, v)
             feats.append(f)
         prov.addFeatures(feats)
@@ -435,7 +632,8 @@ def write_errors(cfg, issues, areas=None):
 
 
 def write_flag_field(cfg, field, keys, layers=None):
-    """Set an integer field to 1 for `keys` and 0 for every other feature (e.g. isconnected)."""
+    """Set an integer field to 1 for `keys` and 0 for every other feature (e.g.
+    isconnected)."""
     layers = layers or class_layers(cfg)
     changed = 0
     for role, lyr in layers.items():
@@ -486,12 +684,18 @@ def read_dirty_areas(cfg):
         lyr = get_layer(cfg.path, "un_dirty_areas")
     except S.StoreError:
         return []
-    return [f.geometry().boundingBox() for f in lyr.getFeatures() if f.hasGeometry()]
+    return [
+        f.geometry().boundingBox()
+        for f in lyr.getFeatures()
+        if f.hasGeometry()
+    ]
 
 
 def export_subnetwork(cfg, info, path):
-    """Write the features of one subnetwork into a new GeoPackage (one layer per class)."""
+    """Write the features of one subnetwork into a new GeoPackage (one layer
+    per class)."""
     from qgis.core import QgsCoordinateTransformContext, QgsVectorFileWriter
+
     by_cls = {}
     for cls, fid in info["lines"] | info["points"]:
         by_cls.setdefault(cls, []).append(fid)
@@ -507,11 +711,22 @@ def export_subnetwork(cfg, info, path):
         opt.driverName = "GPKG"
         opt.layerName = cls
         opt.onlySelectedFeatures = True
-        opt.actionOnExistingFile = (QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteFile if first else
-                                    QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteLayer) \
-            if hasattr(QgsVectorFileWriter, "ActionOnExistingFile") else \
-            (QgsVectorFileWriter.CreateOrOverwriteFile if first else QgsVectorFileWriter.CreateOrOverwriteLayer)
-        res = QgsVectorFileWriter.writeAsVectorFormatV3(lyr, path, QgsCoordinateTransformContext(), opt)
+        opt.actionOnExistingFile = (
+            (
+                QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteFile
+                if first
+                else QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteLayer  # noqa: E501
+            )
+            if hasattr(QgsVectorFileWriter, "ActionOnExistingFile")
+            else (
+                QgsVectorFileWriter.CreateOrOverwriteFile
+                if first
+                else QgsVectorFileWriter.CreateOrOverwriteLayer
+            )
+        )
+        res = QgsVectorFileWriter.writeAsVectorFormatV3(
+            lyr, path, QgsCoordinateTransformContext(), opt
+        )
         lyr.selectByIds(keep)
         if res[0] != 0:
             raise S.StoreError("Could not write %s: %s" % (cls, res[1]))
@@ -521,12 +736,15 @@ def export_subnetwork(cfg, info, path):
 
 
 def verify(cfg):
-    """Verify network topology: consistency of the data with the network definition."""
+    """Verify network topology: consistency of the data with the network
+    definition."""
     out = []
     layers = class_layers(cfg)
     for role, cls in cfg.classes.items():
         if role not in layers:
-            out.append("ERROR  class %s (%s) is missing from the file" % (cls, role))
+            out.append(
+                "ERROR  class %s (%s) is missing from the file" % (cls, role)
+            )
     valid = {(r["class_name"], r["ag_code"], r["at_code"]) for r in cfg.assets}
     groups = {(r["class_name"], r["ag_code"]) for r in cfg.assets}
     fids = {}
@@ -543,39 +761,67 @@ def verify(cfg):
                 bad_at += 1
         fids[cls] = ids
         if bad_ag:
-            out.append("ERROR  %s: %d feature(s) with an asset group that is not in the model" % (cls, bad_ag))
+            out.append(
+                "ERROR  %s: %d feature(s) with an asset group that is not in"
+                " the model" % (cls, bad_ag)
+            )
         if bad_at:
-            out.append("ERROR  %s: %d feature(s) with an asset type that is not in their group" % (cls, bad_at))
+            out.append(
+                "ERROR  %s: %d feature(s) with an asset type that is not in"
+                " their group" % (cls, bad_at)
+            )
     for a, b in cfg.rules:
         for g in (a, b):
             if tuple(g) not in groups:
-                out.append("WARN   rule uses %s group %s, which is not in the model" % g)
-    lost = sum(1 for _t, a, b in cfg.associations if a[1] not in fids.get(a[0], ()) or b[1] not in fids.get(b[0], ()))
+                out.append(
+                    "WARN   rule uses %s group %s, which is not in the model"
+                    % g
+                )
+    lost = sum(
+        1
+        for _t, a, b in cfg.associations
+        if a[1] not in fids.get(a[0], ()) or b[1] not in fids.get(b[0], ())
+    )
     if lost:
-        out.append("ERROR  %d association(s) point to features that no longer exist" % lost)
+        out.append(
+            "ERROR  %d association(s) point to features that no longer exist"
+            % lost
+        )
     dev = cfg.classes.get("Device")
     for (cls, fid), name in cfg.controllers.items():
         if fid not in fids.get(cls, ()):
-            out.append("ERROR  controller %s (%s #%s) no longer exists" % (name, cls, fid))
+            out.append(
+                "ERROR  controller %s (%s #%s) no longer exists"
+                % (name, cls, fid)
+            )
         elif cls != dev:
             out.append("WARN   controller %s is not a device" % name)
     tiers = set(cfg.tier_names())
     for (cls, ag), terms in cfg.terminals.items():
         for name, tier in terms:
             if tier and tier not in tiers:
-                out.append("WARN   terminal %s of %s uses the unknown tier %s" % (name, cfg.label(cls, ag), tier))
+                out.append(
+                    "WARN   terminal %s of %s uses the unknown tier %s"
+                    % (name, cfg.label(cls, ag), tier)
+                )
     for name, by_cls in cfg.network_attributes.items():
         for cls, field in by_cls.items():
             lyr = layers.get(cfg.role_of.get(cls))
             if lyr is not None and lyr.fields().indexFromName(field) < 0:
-                out.append("ERROR  network attribute %s: field %s.%s does not exist" % (name, cls, field))
+                out.append(
+                    "ERROR  network attribute %s: field %s.%s does not exist"
+                    % (name, cls, field)
+                )
     if not out:
-        out.append("OK     the network definition and the data are consistent.")
+        out.append(
+            "OK     the network definition and the data are consistent."
+        )
     return out
 
 
 def write_subnetwork_field(cfg, subs, layers=None):
-    """Write the subnetwork name(s) into the `subnetwork` field of every class."""
+    """Write the subnetwork name(s) into the `subnetwork` field of every
+    class."""
     layers = layers or class_layers(cfg)
     names = {}
     for k, ns in subs["by_key"].items():

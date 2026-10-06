@@ -1,14 +1,23 @@
 """Smart editing: network behaviour while you draw with the normal QGIS tools.
 
 When it is on, for every feature added (or reshaped) in a network class:
-  * a new point near a line is snapped onto it and the line gets a vertex there,
+  * a new point near a line is snapped onto it and the line gets a vertex
+  there,
     or is split in two (option), so the point is connected;
   * the ends of a new line are snapped onto the nearest point / line end / line
     (and a vertex is added in that line), so the line is connected;
-  * the new connections are checked against the connectivity rules and a warning
+  * the new connections are checked against the connectivity rules and a
+  warning
     is shown at once when a rule is broken.
 """
-from qgis.core import QgsFeature, QgsFeatureRequest, QgsGeometry, QgsPointXY, QgsRectangle
+
+from qgis.core import (
+    QgsFeature,
+    QgsFeatureRequest,
+    QgsGeometry,
+    QgsPointXY,
+    QgsRectangle,
+)
 from qgis.PyQt.QtCore import QTimer
 
 from .qgis_io import _int, _lines_of, _point_of, gkind, project_layer
@@ -20,10 +29,11 @@ class SmartEditor:
         self.cfg = None
         self.enabled = False
         self.snap = True
-        self.split = False          # split the line under a new device instead of adding a vertex
+        # split the line under a new device instead of adding a vertex
+        self.split = False
         self.check_rules = True
-        self.distance = None        # snap distance (default: network gap distance)
-        self._layers = {}           # class -> layer
+        self.distance = None  # snap distance (default: network gap distance)
+        self._layers = {}  # class -> layer
         self._pending = []
         self._busy = False
         self._connected = []
@@ -51,8 +61,8 @@ class SmartEditor:
             if lyr is None:
                 continue
             self._layers[cls] = lyr
-            a = lambda fid, l=lyr: self._queue(l, fid)
-            g = lambda fid, _geom, l=lyr: self._queue(l, fid)
+            a = lambda fid, l=lyr: self._queue(l, fid)  # noqa: E731,E741
+            g = lambda fid, _geom, l=lyr: self._queue(l, fid)  # noqa
             lyr.featureAdded.connect(a)
             lyr.geometryChanged.connect(g)
             self._connected.append((lyr, a, g))
@@ -95,11 +105,14 @@ class SmartEditor:
         finally:
             self._busy = False
         if warnings:
-            self.iface.messageBar().pushWarning("Network Studio", "; ".join(sorted(set(warnings)))[:400])
+            self.iface.messageBar().pushWarning(
+                "Network Studio", "; ".join(sorted(set(warnings)))[:400]
+            )
 
     @staticmethod
     def _edit(lyr):
-        """The other network layer must be editable for the automatic change."""
+        """The other network layer must be editable for the automatic
+        change."""
         if not lyr.isEditable():
             lyr.startEditing()
         return lyr
@@ -116,7 +129,9 @@ class SmartEditor:
     def _near(self, pt, radius, kinds=("point", "line"), skip=None):
         """[(dist, cls, layer, feature)] of network features near a point."""
         out = []
-        rect = QgsRectangle(pt.x() - radius, pt.y() - radius, pt.x() + radius, pt.y() + radius)
+        rect = QgsRectangle(
+            pt.x() - radius, pt.y() - radius, pt.x() + radius, pt.y() + radius
+        )
         pg = QgsGeometry.fromPointXY(pt)
         for cls, lyr in self._layers.items():
             if gkind(lyr) not in kinds:
@@ -139,7 +154,7 @@ class SmartEditor:
         g = QgsGeometry(lf.geometry())
         vpt, vidx, _b, _a, vd2 = g.closestVertex(pt)
         target = QgsPointXY(vpt)
-        if vd2 ** 0.5 > max(tol, self._dist() * 0.3):
+        if vd2**0.5 > max(tol, self._dist() * 0.3):
             sd2, spt, after, _l = g.closestSegmentWithContext(pt)
             target = QgsPointXY(spt)
             if self.split and not g.isMultipart():
@@ -147,7 +162,11 @@ class SmartEditor:
             else:
                 g.insertVertex(target.x(), target.y(), after)
                 self._edit(llyr).changeGeometry(lf.id(), g)
-        elif self.split and not g.isMultipart() and 0 < vidx < len(g.asPolyline()) - 1:
+        elif (
+            self.split
+            and not g.isMultipart()
+            and 0 < vidx < len(g.asPolyline()) - 1
+        ):
             self._split_line(llyr, lf, target, None, vidx)
         if self.snap and target.distance(pt) > 0:
             lyr.changeGeometry(f.id(), QgsGeometry.fromPointXY(target))
@@ -159,7 +178,7 @@ class SmartEditor:
         if at_vertex is None:
             coords = coords[:after] + [pt] + coords[after:]
             at_vertex = after
-        part1, part2 = coords[:at_vertex + 1], coords[at_vertex:]
+        part1, part2 = coords[: at_vertex + 1], coords[at_vertex:]
         if len(part1) < 2 or len(part2) < 2:
             return
         llyr.changeGeometry(lf.id(), QgsGeometry.fromPolylineXY(part1))
@@ -210,7 +229,7 @@ class SmartEditor:
             if gkind(hl) == "point":
                 return None
             _v, _i, _b, _a, vd2 = hf.geometry().closestVertex(pt)
-            if vd2 ** 0.5 <= tol:
+            if vd2**0.5 <= tol:
                 return None
         # points first, then line ends / vertices, then segments
         pts = [h for h in hits if gkind(h[2]) == "point"]
@@ -219,7 +238,7 @@ class SmartEditor:
         _d, _cls, hl, hf = hits[0]
         hg = QgsGeometry(hf.geometry())
         vpt, _i, _b, _a, vd2 = hg.closestVertex(pt)
-        if vd2 ** 0.5 <= self._dist():
+        if vd2**0.5 <= self._dist():
             return QgsPointXY(vpt)
         sd2, spt, after, _l = hg.closestSegmentWithContext(pt)
         hg.insertVertex(spt.x(), spt.y(), after)
@@ -232,7 +251,11 @@ class SmartEditor:
             return []
         groups = []
         for d, cls, lyr, f in self._near(pt, self.cfg.tolerance * 2):
-            ag = _int(f["assetgroup"]) if f.fields().indexFromName("assetgroup") >= 0 else None
+            ag = (
+                _int(f["assetgroup"])
+                if f.fields().indexFromName("assetgroup") >= 0
+                else None
+            )
             if ag is not None:
                 groups.append((gkind(lyr), cls, ag, f.id()))
         has_point = any(k == "point" for k, *_r in groups)
@@ -247,5 +270,8 @@ class SmartEditor:
                     continue
                 pair = tuple(sorted(((ca, aa), (cb, ab)), key=str))
                 if pair not in rules:
-                    out.append("No rule: %s - %s" % (self.cfg.label(ca, aa), self.cfg.label(cb, ab)))
+                    out.append(
+                        "No rule: %s - %s"
+                        % (self.cfg.label(ca, aa), self.cfg.label(cb, ab))
+                    )
         return out

@@ -1,18 +1,30 @@
 """Automatic preparation of a network before validation / tracing.
 
 prepare()        closes gaps and adds the vertices connectivity needs:
-                   * point features are moved onto the nearest line end / vertex / segment,
-                   * line ends are moved onto the nearest point / line end / segment,
-                   * a vertex is inserted where something touches a segment between vertices.
-associations()   containment (points inside assemblies / structure boundaries) and
+                   * point features are moved onto the nearest line end /
+                   vertex / segment,
+                   * line ends are moved onto the nearest point / line end /
+                   segment,
+                   * a vertex is inserted where something touches a segment
+                   between vertices.
+associations()   containment (points inside assemblies / structure boundaries)
+and
                  structural attachment (devices next to poles / manholes).
 """
+
 import math
 
 from qgis.core import QgsGeometry, QgsPointXY, QgsSpatialIndex
 
 from . import storage as S
-from .qgis_io import _lines_of, _point_of, class_layers, gkind, layer_source, project_layer
+from .qgis_io import (
+    _lines_of,
+    _point_of,
+    class_layers,
+    gkind,
+    layer_source,
+    project_layer,
+)
 
 
 def _begin(lyr):
@@ -39,10 +51,18 @@ def prepare(cfg, gap=None, snap_points=True, snap_ends=True, feedback=None):
     gap = float(gap or cfg.gap)
     tol = cfg.tolerance
     layers = class_layers(cfg)
-    line_layers = {r: l for r, l in layers.items() if gkind(l) == "line" and not r.startswith("Structure")}
-    point_layers = {r: l for r, l in layers.items() if gkind(l) == "point" and not r.startswith("Structure")}
+    line_layers = {
+        r: l
+        for r, l in layers.items()
+        if gkind(l) == "line" and not r.startswith("Structure")
+    }
+    point_layers = {
+        r: l
+        for r, l in layers.items()
+        if gkind(l) == "point" and not r.startswith("Structure")
+    }
 
-    lines = {}   # (role, fid) -> QgsGeometry (mutable working copy)
+    lines = {}  # (role, fid) -> QgsGeometry (mutable working copy)
     lidx = QgsSpatialIndex()
     lkeys = []
     for role, lyr in line_layers.items():
@@ -64,7 +84,11 @@ def prepare(cfg, gap=None, snap_points=True, snap_ends=True, feedback=None):
                     continue
                 points[(role, f.id())] = QgsPointXY(p)
                 pkeys.append((role, f.id()))
-                pidx.addFeature(_feat(len(pkeys) - 1, QgsGeometry.fromPointXY(QgsPointXY(p))))
+                pidx.addFeature(
+                    _feat(
+                        len(pkeys) - 1, QgsGeometry.fromPointXY(QgsPointXY(p))
+                    )
+                )
 
     moved_points, moved_ends, inserted = {}, 0, 0
     changed_lines = set()
@@ -89,7 +113,7 @@ def prepare(cfg, gap=None, snap_points=True, snap_ends=True, feedback=None):
             if key == skip:
                 continue
             _v, _a, _b, _c, d2 = lines[key].closestVertex(pt)
-            if d2 ** 0.5 <= tol:
+            if d2**0.5 <= tol:
                 return True
         return False
 
@@ -103,9 +127,14 @@ def prepare(cfg, gap=None, snap_points=True, snap_ends=True, feedback=None):
             g = lines[key]
             vpt, _a, _b, _c, vd2 = g.closestVertex(pt)
             sd2, spt, _after, _l = g.closestSegmentWithContext(pt)
-            vd, sd = vd2 ** 0.5, sd2 ** 0.5
-            # prefer an existing vertex when it is almost as close as the segment
-            cand = (vd, QgsPointXY(vpt), key, True) if vd <= max(sd * 1.5, tol) else (sd, QgsPointXY(spt), key, False)
+            vd, sd = vd2**0.5, sd2**0.5
+            # prefer an existing vertex when it is almost as close as the
+            # segment
+            cand = (
+                (vd, QgsPointXY(vpt), key, True)
+                if vd <= max(sd * 1.5, tol)
+                else (sd, QgsPointXY(spt), key, False)
+            )
             if cand[0] <= radius and (best is None or cand[0] < best[0]):
                 best = cand
         return best
@@ -114,7 +143,7 @@ def prepare(cfg, gap=None, snap_points=True, snap_ends=True, feedback=None):
         nonlocal inserted
         g = lines[key]
         _v, _a, _b, _c, d2 = g.closestVertex(pt)
-        if d2 ** 0.5 <= tol:
+        if d2**0.5 <= tol:
             return
         _sd2, _sp, after, _l = g.closestSegmentWithContext(pt)
         if g.insertVertex(pt.x(), pt.y(), after):
@@ -145,7 +174,9 @@ def prepare(cfg, gap=None, snap_points=True, snap_ends=True, feedback=None):
                 for end_index in (0, len(part) - 1):
                     x, y = part[end_index]
                     pt = QgsPointXY(x, y)
-                    if _connected(pt, key, points, pidx, pkeys, lines, lidx, lkeys, tol):
+                    if _connected(
+                        pt, key, points, pidx, pkeys, lines, lidx, lkeys, tol
+                    ):
                         continue
                     target = None
                     hp = _nearest_point(pt, points, pidx, pkeys, gap)
@@ -187,11 +218,16 @@ def prepare(cfg, gap=None, snap_points=True, snap_ends=True, feedback=None):
         if changes:
             loaded = _begin(lyr)
             _end(lyr, loaded, changes)
-    return {"points_moved": len(moved_points), "line_ends_moved": moved_ends, "vertices_inserted": inserted}
+    return {
+        "points_moved": len(moved_points),
+        "line_ends_moved": moved_ends,
+        "vertices_inserted": inserted,
+    }
 
 
 def _feat(fid, geom):
     from qgis.core import QgsFeature
+
     f = QgsFeature()
     f.setId(fid)
     f.setGeometry(geom)
@@ -225,7 +261,7 @@ def _connected(pt, key, points, pidx, pkeys, lines, lidx, lkeys, tol):
         if other == key:
             continue
         _v, _a, _b, _c, d2 = lines[other].closestVertex(pt)
-        if d2 ** 0.5 <= tol:
+        if d2**0.5 <= tol:
             return True
     return False
 
@@ -234,7 +270,9 @@ def _connected(pt, key, points, pidx, pkeys, lines, lidx, lkeys, tol):
 def associations(cfg, attach_distance=1.0, containment=True, attachment=True):
     """Create containment and structural attachment associations automatically.
 
-    Existing connectivity associations are kept; containment / attachment are rebuilt."""
+    Existing connectivity associations are kept; containment / attachment are
+    rebuilt.
+    """
     layers = class_layers(cfg)
     polys = {r: l for r, l in layers.items() if gkind(l) == "polygon"}
     pts = {r: l for r, l in layers.items() if gkind(l) == "point"}
@@ -251,12 +289,18 @@ def associations(cfg, attach_distance=1.0, containment=True, attachment=True):
                     cls = cfg.classes[role]
                     for f in lyr.getFeatures(pg.boundingBox()):
                         if f.hasGeometry() and pg.contains(f.geometry()):
-                            found.append(("containment", (pcls, pf.id()), (cls, f.id())))
+                            found.append(
+                                ("containment", (pcls, pf.id()), (cls, f.id()))
+                            )
     if attachment and "StructureJunction" in layers and "Device" in layers:
         s_lyr, d_lyr = layers["StructureJunction"], layers["Device"]
         s_cls, d_cls = cfg.classes["StructureJunction"], cfg.classes["Device"]
         idx = QgsSpatialIndex(s_lyr.getFeatures())
-        geoms = {f.id(): f.geometry() for f in s_lyr.getFeatures() if f.hasGeometry()}
+        geoms = {
+            f.id(): f.geometry()
+            for f in s_lyr.getFeatures()
+            if f.hasGeometry()
+        }
         for f in d_lyr.getFeatures():
             if not f.hasGeometry():
                 continue
@@ -265,6 +309,8 @@ def associations(cfg, attach_distance=1.0, containment=True, attachment=True):
                 if sid in geoms:
                     found.append(("attachment", (s_cls, sid), (d_cls, f.id())))
     S.save_associations(cfg.path, keep + found)
-    return {"containment": sum(1 for a in found if a[0] == "containment"),
-            "attachment": sum(1 for a in found if a[0] == "attachment"),
-            "connectivity": len(keep)}
+    return {
+        "containment": sum(1 for a in found if a[0] == "containment"),
+        "attachment": sum(1 for a in found if a[0] == "attachment"),
+        "connectivity": len(keep),
+    }

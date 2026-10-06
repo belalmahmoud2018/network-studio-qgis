@@ -1,19 +1,40 @@
 """Import existing data into the network classes.
 
-The asset group / type of every imported feature comes either from a fixed choice or from
-the values of a field of the source layer. For a field, suggest_mapping() proposes the
-matching asset group / type for each distinct value by comparing the texts (e.g. a value
-"Gate Valve" -> group "System valve", type "Gate"). Fields with the same name are copied.
+The asset group / type of every imported feature comes either from a fixed
+choice or from
+the values of a field of the source layer. For a field, suggest_mapping()
+proposes the
+matching asset group / type for each distinct value by comparing the texts
+(e.g. a value
+"Gate Valve" -> group "System valve", type "Gate"). Fields with the same name
+are copied.
 """
+
 import difflib
 import re
 
-from qgis.core import QgsCoordinateTransform, QgsFeature, QgsGeometry, QgsProject, QgsWkbTypes
+from qgis.core import (
+    QgsCoordinateTransform,
+    QgsFeature,
+    QgsGeometry,
+    QgsProject,
+    QgsWkbTypes,
+)
 
 from .qgis_io import _int, class_layers, gkind, layer_source, project_layer
 
-SKIP_FIELDS = {"fid", "objectid", "ogc_fid", "assetgroup", "assettype", "globalid", "shape_length",
-               "shape_area", "shape__length", "shape__area"}
+SKIP_FIELDS = {
+    "fid",
+    "objectid",
+    "ogc_fid",
+    "assetgroup",
+    "assettype",
+    "globalid",
+    "shape_length",
+    "shape_area",
+    "shape__length",
+    "shape__area",
+}
 
 
 def _words(text):
@@ -50,21 +71,39 @@ def distinct_values(layer, field, limit=500):
     if i < 0:
         return []
     vals = layer.uniqueValues(i, limit)
-    return sorted((v for v in vals if v is not None and str(v) != "NULL"), key=str)
+    return sorted(
+        (v for v in vals if v is not None and str(v) != "NULL"), key=str
+    )
 
 
-def run(cfg, role, source, group_field=None, mapping=None, fixed=None, selected_only=False,
-        lifecycle=3, feedback=None):
+def run(
+    cfg,
+    role,
+    source,
+    group_field=None,
+    mapping=None,
+    fixed=None,
+    selected_only=False,
+    lifecycle=3,
+    feedback=None,
+):
     """Append `source` features to the class of `role`.
 
-    mapping: {value: (ag, at)} when group_field is set, else `fixed` = (ag, at)."""
+    mapping: {value: (ag, at)} when group_field is set, else `fixed` = (ag,
+    at).
+    """
     target = class_layers(cfg)[role]
     tk, sk = gkind(target), gkind(source)
     if tk != sk:
-        raise ValueError("Geometry mismatch: the source has %s features, %s needs %s." % (sk, role, tk))
+        raise ValueError(
+            "Geometry mismatch: the source has %s features, %s needs %s."
+            % (sk, role, tk)
+        )
     xform = None
     if source.crs() != target.crs():
-        xform = QgsCoordinateTransform(source.crs(), target.crs(), QgsProject.instance())
+        xform = QgsCoordinateTransform(
+            source.crs(), target.crs(), QgsProject.instance()
+        )
     tfields = target.fields()
     copy = []
     for sf in source.fields():
@@ -73,12 +112,25 @@ def run(cfg, role, source, group_field=None, mapping=None, fixed=None, selected_
             continue
         ti = tfields.indexFromName(name)
         if ti < 0:
-            ti = next((i for i, f in enumerate(tfields) if f.name().lower() == name.lower()), -1)
+            ti = next(
+                (
+                    i
+                    for i, f in enumerate(tfields)
+                    if f.name().lower() == name.lower()
+                ),
+                -1,
+            )
         if ti >= 0:
             copy.append((source.fields().indexFromName(name), ti))
     gi = source.fields().indexFromName(group_field) if group_field else -1
-    feats = source.getSelectedFeatures() if selected_only else source.getFeatures()
-    total = source.selectedFeatureCount() if selected_only else source.featureCount()
+    feats = (
+        source.getSelectedFeatures() if selected_only else source.getFeatures()
+    )
+    total = (
+        source.selectedFeatureCount()
+        if selected_only
+        else source.featureCount()
+    )
     new, skipped, unmapped = [], 0, 0
     multi = QgsWkbTypes.isMultiType(target.wkbType())
     for n, f in enumerate(feats):

@@ -8,14 +8,20 @@ Input
 points : [{"key": (class, fid), "x", "y", "ag", "at", "closed": bool}]
 lines  : [{"key": (class, fid), "parts": [[(x, y), ...]], "ag", "at",
            "reverse": bool, "oneway": 0|1|2}]
-cats   : {(class, ag): set of categories}   e.g. {"source", "isolating", "customer"}
+cats   : {(class, ag): set of categories}   e.g. {"source", "isolating",
+"customer"}
 tiers  : {(class, ag): tier name or None}
-flow   : "source" (pressure networks), "gravity" (sewer/storm) or "undirected" (roads)
+flow   : "source" (pressure networks), "gravity" (sewer/storm) or "undirected"
+(roads)
 
-Connectivity follows the usual utility-network idea: features connect when they are
-coincident (within the tolerance) at a line END POINT or at a line VERTEX touched by a
-point feature or by another line's end point. Lines that only cross are not connected.
+Connectivity follows the usual utility-network idea: features connect when they
+are
+coincident (within the tolerance) at a line END POINT or at a line VERTEX
+touched by a
+point feature or by another line's end point. Lines that only cross are not
+connected.
 """
+
 import heapq
 import math
 from collections import defaultdict, deque
@@ -32,20 +38,25 @@ class _Grid:
         self.d = defaultdict(list)
 
     def add(self, x, y, item):
-        self.d[(math.floor(x / self.cell), math.floor(y / self.cell))].append((x, y, item))
+        self.d[(math.floor(x / self.cell), math.floor(y / self.cell))].append(
+            (x, y, item)
+        )
 
     def near(self, x, y, r):
         c = self.cell
         r2 = r * r
         for i in range(math.floor((x - r) / c), math.floor((x + r) / c) + 1):
-            for j in range(math.floor((y - r) / c), math.floor((y + r) / c) + 1):
+            for j in range(
+                math.floor((y - r) / c), math.floor((y + r) / c) + 1
+            ):
                 for px, py, item in self.d.get((i, j), ()):
                     if (px - x) ** 2 + (py - y) ** 2 <= r2:
                         yield px, py, item
 
 
 class _SegGrid:
-    """Hash grid for segments (registered in every cell their padded bbox covers)."""
+    """Hash grid for segments (registered in every cell their padded bbox
+    covers)."""
 
     def __init__(self, cell, pad):
         self.cell, self.pad = max(cell, 1e-12), pad
@@ -53,19 +64,31 @@ class _SegGrid:
 
     def add(self, x1, y1, x2, y2, item):
         c, p = self.cell, self.pad
-        for i in range(math.floor((min(x1, x2) - p) / c), math.floor((max(x1, x2) + p) / c) + 1):
-            for j in range(math.floor((min(y1, y2) - p) / c), math.floor((max(y1, y2) + p) / c) + 1):
+        for i in range(
+            math.floor((min(x1, x2) - p) / c),
+            math.floor((max(x1, x2) + p) / c) + 1,
+        ):
+            for j in range(
+                math.floor((min(y1, y2) - p) / c),
+                math.floor((max(y1, y2) + p) / c) + 1,
+            ):
                 self.d[(i, j)].append((x1, y1, x2, y2, item))
 
     def near(self, x, y):
-        return self.d.get((math.floor(x / self.cell), math.floor(y / self.cell)), ())
+        return self.d.get(
+            (math.floor(x / self.cell), math.floor(y / self.cell)), ()
+        )
 
 
 def seg_distance(px, py, x1, y1, x2, y2):
     """(distance, t) from a point to a segment, t = position 0..1 along it."""
     dx, dy = x2 - x1, y2 - y1
     l2 = dx * dx + dy * dy
-    t = 0.0 if l2 == 0 else max(0.0, min(1.0, ((px - x1) * dx + (py - y1) * dy) / l2))
+    t = (
+        0.0
+        if l2 == 0
+        else max(0.0, min(1.0, ((px - x1) * dx + (py - y1) * dy) / l2))
+    )
     qx, qy = x1 + t * dx, y1 + t * dy
     return math.hypot(px - qx, py - qy), t
 
@@ -94,7 +117,8 @@ OPS = ("=", "!=", "<", "<=", ">", ">=", "is empty", "is not empty")
 
 
 def _match(feature, conditions):
-    """True when a feature meets any (attribute, operator, value) condition (OR)."""
+    """True when a feature meets any (attribute, operator, value) condition
+    (OR)."""
     attrs = feature.get("attrs") or {}
     for name, op, value in conditions:
         v = attrs.get(name)
@@ -112,17 +136,23 @@ def _match(feature, conditions):
             a, b = float(v), float(value)
         except (TypeError, ValueError):
             a, b = str(v).lower(), str(value).lower()
-        if ((op == "=" and a == b) or (op == "!=" and a != b) or (op == "<" and a < b) or
-                (op == "<=" and a <= b) or (op == ">" and a > b) or (op == ">=" and a >= b)):
+        if (
+            (op == "=" and a == b)
+            or (op == "!=" and a != b)
+            or (op == "<" and a < b)
+            or (op == "<=" and a <= b)
+            or (op == ">" and a > b)
+            or (op == ">=" and a >= b)
+        ):
             return True
     return False
 
 
 class TraceResult:
     def __init__(self):
-        self.lines = set()      # line feature keys
-        self.points = set()     # point feature keys
-        self.extra = {}         # trace specific details
+        self.lines = set()  # line feature keys
+        self.points = set()  # point feature keys
+        self.extra = {}  # trace specific details
         self.message = ""
 
     def count(self):
@@ -131,8 +161,20 @@ class TraceResult:
 
 # --------------------------------------------------------------------- network
 class Network:
-    def __init__(self, points, lines, tolerance, cats=None, tiers=None, flow="source",
-                 associations=(), gap=None, terminals=None, controllers=None, tier_settings=None):
+    def __init__(
+        self,
+        points,
+        lines,
+        tolerance,
+        cats=None,
+        tiers=None,
+        flow="source",
+        associations=(),
+        gap=None,
+        terminals=None,
+        controllers=None,
+        tier_settings=None,
+    ):
         self.points = list(points)
         self.lines = list(lines)
         self.tol = float(tolerance)
@@ -140,10 +182,16 @@ class Network:
         self.cats = cats or {}
         self.tiers = tiers or {}
         self.flow = flow
-        self.terminals = terminals or {}   # {(class, ag): [(terminal name, tier), ...]}
-        self.controllers = dict(controllers or {})   # {(class, fid): subnetwork name} explicit controllers
-        self.tier_settings = tier_settings or {}     # {tier: {"multi": bool, "require": bool}}
-        self.issues = []        # (code, severity, message, x, y, key)
+        self.terminals = (
+            terminals or {}
+        )  # {(class, ag): [(terminal name, tier), ...]}
+        self.controllers = dict(
+            controllers or {}
+        )  # {(class, fid): subnetwork name} explicit controllers
+        self.tier_settings = (
+            tier_settings or {}
+        )  # {tier: {"multi": bool, "require": bool}}
+        self.issues = []  # (code, severity, message, x, y, key)
         self._build(associations)
 
     # ---------------------------------------------------------------- build
@@ -183,8 +231,10 @@ class Network:
         self._sgrid = sgrid
 
         self._endvertex_hits = []
-        conn = defaultdict(set)      # (li, pt) -> connection vertex indexes
-        partners = defaultdict(int)  # candidate token -> number of coincident others
+        conn = defaultdict(set)  # (li, pt) -> connection vertex indexes
+        partners = defaultdict(
+            int
+        )  # candidate token -> number of coincident others
         candidates = []
         for li, ln in enumerate(self.lines):
             for pt, coords in enumerate(ln["parts"]):
@@ -203,12 +253,22 @@ class Network:
                 other = ("V", li, pt, vi)
                 if other == token:
                     continue
-                if own_line == li and token[2] == pt and abs(token[3] - vi) == 0:
+                if (
+                    own_line == li
+                    and token[2] == pt
+                    and abs(token[3] - vi) == 0
+                ):
                     continue
                 last_v = len(self.lines[li]["parts"][pt]) - 1
-                if token[0] == "V" and vi in (0, last_v) and self._level(token[1], token[3], token[2]) != \
-                        self._level(li, vi, pt):
-                    continue  # grade separated (bridge / tunnel): same place, different level
+                if (
+                    token[0] == "V"
+                    and vi in (0, last_v)
+                    and self._level(token[1], token[3], token[2])
+                    != self._level(li, vi, pt)
+                ):
+                    # grade separated (bridge / tunnel): same place, different
+                    # level
+                    continue
                 if 0 < vi < last_v and "endvertex" in self.line_cats(li):
                     self._endvertex_hits.append((token, li))
                     continue  # this line connects only at its end vertices
@@ -254,22 +314,53 @@ class Network:
             for v0, v1 in zip(idxs, idxs[1:]):
                 a = node_id(("V", li, pt, v0), coords[v0])
                 b = node_id(("V", li, pt, v1), coords[v1])
-                length = sum(math.hypot(coords[k][0] - coords[k - 1][0], coords[k][1] - coords[k - 1][1])
-                             for k in range(v0 + 1, v1 + 1))
+                length = sum(
+                    math.hypot(
+                        coords[k][0] - coords[k - 1][0],
+                        coords[k][1] - coords[k - 1][1],
+                    )
+                    for k in range(v0 + 1, v1 + 1)
+                )
                 eid = len(self.edges)
-                self.edges.append({"line": li, "part": pt, "v0": v0, "v1": v1,
-                                   "a": a, "b": b, "length": length})
+                self.edges.append(
+                    {
+                        "line": li,
+                        "part": pt,
+                        "v0": v0,
+                        "v1": v1,
+                        "a": a,
+                        "b": b,
+                        "length": length,
+                    }
+                )
                 self.line_edges[li].append(eid)
 
-        # connectivity associations become zero-length edges between two point nodes
+        # connectivity associations become zero-length edges between two point
+        # nodes
         key_point = {p["key"]: pi for pi, p in enumerate(self.points)}
         for kind, ka, kb in associations:
-            if kind != "connectivity" or ka not in key_point or kb not in key_point:
+            if (
+                kind != "connectivity"
+                or ka not in key_point
+                or kb not in key_point
+            ):
                 continue
-            a, b = self.point_node[key_point[ka]], self.point_node[key_point[kb]]
+            a, b = (
+                self.point_node[key_point[ka]],
+                self.point_node[key_point[kb]],
+            )
             if a != b:
-                self.edges.append({"line": None, "part": None, "v0": None, "v1": None,
-                                   "a": a, "b": b, "length": 0.0})
+                self.edges.append(
+                    {
+                        "line": None,
+                        "part": None,
+                        "v0": None,
+                        "v1": None,
+                        "a": a,
+                        "b": b,
+                        "length": 0.0,
+                    }
+                )
 
         self._split_terminals()
 
@@ -282,7 +373,8 @@ class Network:
         self._partners = partners
 
     def _level(self, li, vi, pt=0):
-        """Elevation level (Esri F_ELEV / T_ELEV) of a line end; 0 when unknown."""
+        """Elevation level (Esri F_ELEV / T_ELEV) of a line end; 0 when
+        unknown."""
         lv = self.lines[li].get("levels")
         if not lv:
             return 0
@@ -290,8 +382,11 @@ class Network:
         return (lv[0] or 0) if vi == 0 else (lv[1] or 0) if vi == last else 0
 
     def _split_terminals(self):
-        """Devices with terminals (e.g. transformer high / low side): every terminal gets its own
-        node; lines attach to the terminal of their tier; the device joins its terminals."""
+        """Devices with terminals (e.g. transformer high / low side): every
+        terminal gets its own
+        node; lines attach to the terminal of their tier; the device joins its
+        terminals.
+        """
         self.terminal_issues = []
         if not self.terminals:
             return
@@ -305,8 +400,19 @@ class Network:
                 tnode[tier] = len(self.node_xy)
                 self.node_xy.append(self.node_xy[n])
                 self.node_points.append([])
-                self.edges.append({"line": None, "part": None, "v0": None, "v1": None,
-                                   "a": n, "b": tnode[tier], "length": 0.0, "device": pi, "terminal": name})
+                self.edges.append(
+                    {
+                        "line": None,
+                        "part": None,
+                        "v0": None,
+                        "v1": None,
+                        "a": n,
+                        "b": tnode[tier],
+                        "length": 0.0,
+                        "device": pi,
+                        "terminal": name,
+                    }
+                )
             for e in self.edges:
                 if e["line"] is None:
                     continue
@@ -351,22 +457,36 @@ class Network:
         return best
 
     def controller_points(self):
-        """Indexes of the points that control subnetworks (explicit controllers, else 'source' groups)."""
+        """Indexes of the points that control subnetworks (explicit
+        controllers, else 'source' groups)."""
         if self.controllers:
-            return [pi for pi, p in enumerate(self.points) if p["key"] in self.controllers]
-        return [pi for pi in range(len(self.points)) if "source" in self.point_cats(pi)]
+            return [
+                pi
+                for pi, p in enumerate(self.points)
+                if p["key"] in self.controllers
+            ]
+        return [
+            pi
+            for pi in range(len(self.points))
+            if "source" in self.point_cats(pi)
+        ]
 
     def source_nodes(self):
         return {self.point_node[pi] for pi in self.controller_points()}
 
     def connected_keys(self):
-        """Features topologically connected to any controller (operating status ignored): 'Is connected'."""
+        """Features topologically connected to any controller (operating status
+        ignored): 'Is connected'."""
         nodes, edges = self._bfs(self.source_nodes(), ())
         r = self._collect(nodes, edges)
         return r.lines | r.points
 
     def closed_nodes(self):
-        return {self.point_node[pi] for pi, p in enumerate(self.points) if p.get("closed")}
+        return {
+            self.point_node[pi]
+            for pi, p in enumerate(self.points)
+            if p.get("closed")
+        }
 
     def _collect(self, nodes, edges, res=None):
         res = res or TraceResult()
@@ -380,9 +500,17 @@ class Network:
         return res
 
     # ------------------------------------------------------------ traversal
-    def _bfs(self, start_nodes, start_edges, blocked_nodes=(), blocked_edges=(), edge_ok=None):
+    def _bfs(
+        self,
+        start_nodes,
+        start_edges,
+        blocked_nodes=(),
+        blocked_edges=(),
+        edge_ok=None,
+    ):
         seen_n, seen_e = set(), set(start_edges)
-        # a picked point always spreads; the ends of a picked line stop at barriers (a closed or
+        # a picked point always spreads; the ends of a picked line stop at
+        # barriers (a closed or
         # isolating device at the end of a broken pipe must not be crossed)
         starts = set(start_nodes)
         q = deque(start_nodes)
@@ -419,7 +547,9 @@ class Network:
                 return e["b"], e["a"]
         return None
 
-    def _dijkstra(self, sources, blocked_nodes=(), blocked_edges=(), directed=False):
+    def _dijkstra(
+        self, sources, blocked_nodes=(), blocked_edges=(), directed=False
+    ):
         dist = {s: 0.0 for s in sources}
         parent = {}
         heap = [(0.0, s) for s in sources]
@@ -445,9 +575,21 @@ class Network:
         return dist, parent
 
     # ---------------------------------------------------------------- traces
-    def trace(self, kind, start_nodes, start_edges, barrier_nodes=(), barrier_edges=(),
-              use_status=True, target_nodes=(), target_edges=(), exclude_lifecycle=(),
-              min_size=None, output_groups=None, conditions=()):
+    def trace(
+        self,
+        kind,
+        start_nodes,
+        start_edges,
+        barrier_nodes=(),
+        barrier_edges=(),
+        use_status=True,
+        target_nodes=(),
+        target_edges=(),
+        exclude_lifecycle=(),
+        min_size=None,
+        output_groups=None,
+        conditions=(),
+    ):
         blocked = set(barrier_nodes)
         if use_status:
             blocked |= self.closed_nodes()
@@ -460,29 +602,54 @@ class Network:
                 ln = self.lines[e["line"]]
                 if ln.get("lifecycle") in ex:
                     bedges.add(eid)
-                elif min_size and ln.get("size") is not None and ln["size"] < min_size:
+                elif (
+                    min_size
+                    and ln.get("size") is not None
+                    and ln["size"] < min_size
+                ):
                     bedges.add(eid)
             for pi, p in enumerate(self.points):
                 if p.get("lifecycle") in ex:
                     blocked.add(self.point_node[pi])
         if conditions:
             for eid, e in enumerate(self.edges):
-                if e["line"] is not None and _match(self.lines[e["line"]], conditions):
+                if e["line"] is not None and _match(
+                    self.lines[e["line"]], conditions
+                ):
                     bedges.add(eid)
             for pi, p in enumerate(self.points):
                 if _match(p, conditions):
                     blocked.add(self.point_node[pi])
-        res = self._trace(kind, start_nodes, start_edges, blocked, bedges, target_nodes, target_edges)
+        res = self._trace(
+            kind,
+            start_nodes,
+            start_edges,
+            blocked,
+            bedges,
+            target_nodes,
+            target_edges,
+        )
         if output_groups:
             keep = set(output_groups)
             ag_of = {p["key"]: (p["key"][0], p["ag"]) for p in self.points}
-            ag_of.update({ln["key"]: (ln["key"][0], ln["ag"]) for ln in self.lines})
+            ag_of.update(
+                {ln["key"]: (ln["key"][0], ln["ag"]) for ln in self.lines}
+            )
             res.lines = {k for k in res.lines if ag_of.get(k) in keep}
             res.points = {k for k in res.points if ag_of.get(k) in keep}
             res.message += " Shown after the output filter: %d." % res.count()
         return res
 
-    def _trace(self, kind, start_nodes, start_edges, blocked, bedges, target_nodes, target_edges):
+    def _trace(
+        self,
+        kind,
+        start_nodes,
+        start_edges,
+        blocked,
+        bedges,
+        target_nodes,
+        target_edges,
+    ):
         start_nodes, start_edges = set(start_nodes), set(start_edges)
         if not start_nodes and not start_edges and kind not in ("loops",):
             res = TraceResult()
@@ -490,7 +657,14 @@ class Network:
             return res
         fn = getattr(self, "_trace_" + kind)
         if kind == "shortest_path":
-            return fn(start_nodes, start_edges, set(target_nodes), set(target_edges), blocked, bedges)
+            return fn(
+                start_nodes,
+                start_edges,
+                set(target_nodes),
+                set(target_edges),
+                blocked,
+                bedges,
+            )
         return fn(start_nodes, start_edges, blocked, bedges)
 
     def _trace_connected(self, sn, se, blocked, bedges):
@@ -500,7 +674,8 @@ class Network:
         return res
 
     def _ends(self, se, sn, dist, low):
-        """Root nodes for up/downstream from start edges using source distances."""
+        """Root nodes for up/downstream from start edges using source
+        distances."""
         roots = set(sn)
         for eid in se:
             e = self.edges[eid]
@@ -518,8 +693,11 @@ class Network:
         return self._updown(sn, se, blocked, bedges, down=False)
 
     def _trace_upstream_all(self, sn, se, blocked, bedges):
-        """Upstream through every possible path: in looped pressure networks the flow can reach the
-        start along any loop, so every loop (biconnected block) between the start and a source counts."""
+        """Upstream through every possible path: in looped pressure networks
+        the flow can reach the
+        start along any loop, so every loop (biconnected block) between the
+        start and a source counts.
+        """
         res = TraceResult()
         if self.flow != "source":
             return self._updown(sn, se, blocked, bedges, down=False)
@@ -528,8 +706,15 @@ class Network:
             res.message = "No source (subnetwork controller) found."
             return res
         starts = set(sn) | {self.edges[e][k] for e in se for k in ("a", "b")}
-        usable = {eid for eid, e in enumerate(self.edges) if eid not in bedges and
-                  not ((e["a"] in blocked and e["a"] not in starts) or (e["b"] in blocked and e["b"] not in starts))}
+        usable = {
+            eid
+            for eid, e in enumerate(self.edges)
+            if eid not in bedges
+            and not (
+                (e["a"] in blocked and e["a"] not in starts)
+                or (e["b"] in blocked and e["b"] not in starts)
+            )
+        }
         blocks = self.blocks(usable)
         node_blocks = defaultdict(set)
         for bi, edges in enumerate(blocks):
@@ -544,8 +729,15 @@ class Network:
             q.append(("N", n))
         while q:
             v = q.popleft()
-            nxt = [("B", b) for b in node_blocks[v[1]]] if v[0] == "N" else \
-                [("N", n) for eid in blocks[v[1]] for n in (self.edges[eid]["a"], self.edges[eid]["b"])]
+            nxt = (
+                [("B", b) for b in node_blocks[v[1]]]
+                if v[0] == "N"
+                else [
+                    ("N", n)
+                    for eid in blocks[v[1]]
+                    for n in (self.edges[eid]["a"], self.edges[eid]["b"])
+                ]
+            )
             for w in nxt:
                 if w not in parent:
                     parent[w] = v
@@ -564,11 +756,14 @@ class Network:
             edges |= blocks[b]
         nodes = {self.edges[e][k] for e in edges for k in ("a", "b")} | starts
         res = self._collect(nodes, edges)
-        res.message = "%d upstream feature(s) (all paths, loops included)." % res.count()
+        res.message = (
+            "%d upstream feature(s) (all paths, loops included)." % res.count()
+        )
         return res
 
     def blocks(self, edge_set):
-        """Biconnected components (lists of edge sets) of the sub graph made of edge_set."""
+        """Biconnected components (lists of edge sets) of the sub graph made of
+        edge_set."""
         adj = defaultdict(list)
         for eid in edge_set:
             e = self.edges[eid]
@@ -618,7 +813,10 @@ class Network:
     def _updown(self, sn, se, blocked, bedges, down):
         res = TraceResult()
         if self.flow == "undirected":
-            res.message = "Upstream / downstream need a flow direction (not available for this network type)."
+            res.message = (
+                "Upstream / downstream need a flow direction (not available"
+                " for this network type)."
+            )
             return res
         if self.flow == "gravity":
             out = defaultdict(list)
@@ -627,15 +825,22 @@ class Network:
                     continue
                 d = self._directed(eid)
                 if d is None:
-                    out[self.edges[eid]["a"]].append((eid, self.edges[eid]["b"]))
-                    out[self.edges[eid]["b"]].append((eid, self.edges[eid]["a"]))
+                    out[self.edges[eid]["a"]].append(
+                        (eid, self.edges[eid]["b"])
+                    )
+                    out[self.edges[eid]["b"]].append(
+                        (eid, self.edges[eid]["a"])
+                    )
                     continue
                 f, t = d if down else (d[1], d[0])
                 out[f].append((eid, t))
             q = deque(sn)
             nodes, edges = set(), set(se)
             for eid in se:
-                d = self._directed(eid) or (self.edges[eid]["a"], self.edges[eid]["b"])
+                d = self._directed(eid) or (
+                    self.edges[eid]["a"],
+                    self.edges[eid]["b"],
+                )
                 q.append(d[1] if down else d[0])
             while q:
                 n = q.popleft()
@@ -648,17 +853,26 @@ class Network:
                     edges.add(eid)
                     q.append(m)
             res = self._collect(nodes, edges)
-            res.message = "%d %s feature(s)." % (res.count(), "downstream" if down else "upstream")
+            res.message = "%d %s feature(s)." % (
+                res.count(),
+                "downstream" if down else "upstream",
+            )
             return res
 
         sources = self.source_nodes()
         if not sources:
-            res.message = "No source (subnetwork controller) found. Add a source device first."
+            res.message = (
+                "No source (subnetwork controller) found. Add a source device"
+                " first."
+            )
             return res
         dist, parent = self._dijkstra(sources, blocked, bedges)
         roots = self._ends(se, sn, dist, low=not down)
         if not any(r in dist for r in roots):
-            res.message = "The start is not fed by any source (check closed devices or gaps)."
+            res.message = (
+                "The start is not fed by any source (check closed devices or"
+                " gaps)."
+            )
             return res
         if down:
             children = defaultdict(list)
@@ -685,36 +899,77 @@ class Network:
                     eid, n = parent[n]
                     edges.add(eid)
         res = self._collect(nodes, edges)
-        res.message = "%d %s feature(s) (main feed path)." % (res.count(), "downstream" if down else "upstream")
+        res.message = "%d %s feature(s) (main feed path)." % (
+            res.count(),
+            "downstream" if down else "upstream",
+        )
         return res
 
     def _trace_isolation(self, sn, se, blocked, bedges):
         res = TraceResult()
         if self.flow == "undirected":
-            res.message = "Isolation is for pressure networks (valves / switches)."
+            res.message = (
+                "Isolation is for pressure networks (valves / switches)."
+            )
             return res
-        isolating = {self.point_node[pi] for pi in range(len(self.points))
-                     if "isolating" in self.point_cats(pi) and not self.points[pi].get("closed")}
+        isolating = {
+            self.point_node[pi]
+            for pi in range(len(self.points))
+            if "isolating" in self.point_cats(pi)
+            and not self.points[pi].get("closed")
+        }
         # area reached from the start before hitting isolating devices
         area_n, area_e = self._bfs(sn, se, blocked | isolating, bedges)
         to_close = (area_n & isolating) - sn
         sources = self.source_nodes()
-        before_n, before_e = self._bfs(sources, (), blocked, bedges) if sources else (set(), set())
-        after_n, after_e = self._bfs(sources - to_close - area_n, (), blocked | to_close, bedges | area_e) \
-            if sources else (set(), set())
+        before_n, before_e = (
+            self._bfs(sources, (), blocked, bedges)
+            if sources
+            else (set(), set())
+        )
+        after_n, after_e = (
+            self._bfs(
+                sources - to_close - area_n,
+                (),
+                blocked | to_close,
+                bedges | area_e,
+            )
+            if sources
+            else (set(), set())
+        )
         lost_n = (before_n - after_n) | (area_n - to_close)
         lost_e = (before_e - after_e) | area_e
         res = self._collect(lost_n - to_close, lost_e)
-        valves = [self.points[pi]["key"] for n in to_close for pi in self.node_points[n]
-                  if "isolating" in self.point_cats(pi)]
-        customers = [self.points[pi]["key"] for n in lost_n for pi in self.node_points[n]
-                     if "customer" in self.point_cats(pi)]
-        res.extra = {"to_close": sorted(valves), "customers": sorted(customers)}
+        valves = [
+            self.points[pi]["key"]
+            for n in to_close
+            for pi in self.node_points[n]
+            if "isolating" in self.point_cats(pi)
+        ]
+        customers = [
+            self.points[pi]["key"]
+            for n in lost_n
+            for pi in self.node_points[n]
+            if "customer" in self.point_cats(pi)
+        ]
+        res.extra = {
+            "to_close": sorted(valves),
+            "customers": sorted(customers),
+        }
         res.points |= set(valves)
-        res.message = "Close %d isolating device(s); %d feature(s) and %d customer(s) lose supply." % (
-            len(valves), len(res.lines) + len(res.points) - len(valves), len(customers))
+        res.message = (
+            "Close %d isolating device(s); %d feature(s) and %d customer(s)"
+            " lose supply."
+            % (
+                len(valves),
+                len(res.lines) + len(res.points) - len(valves),
+                len(customers),
+            )
+        )
         if not sources:
-            res.message += " (No source defined: only the isolated area is shown.)"
+            res.message += (
+                " (No source defined: only the isolated area is shown.)"
+            )
         return res
 
     def _trace_shortest_path(self, sn, se, tn, te, blocked, bedges):
@@ -724,7 +979,9 @@ class Network:
         if not targets:
             res.message = "Shortest path needs a start and an end point."
             return res
-        dist, parent = self._dijkstra(starts, blocked, bedges, directed=self.flow == "undirected")
+        dist, parent = self._dijkstra(
+            starts, blocked, bedges, directed=self.flow == "undirected"
+        )
         reach = [t for t in targets if t in dist]
         if not reach:
             res.message = "No path between the start and the end."
@@ -738,11 +995,15 @@ class Network:
             nodes.add(n)
         res = self._collect(nodes, edges)
         res.extra = {"length": dist[t]}
-        res.message = "Path length: %.2f map units, %d feature(s)." % (dist[t], res.count())
+        res.message = "Path length: %.2f map units, %d feature(s)." % (
+            dist[t],
+            res.count(),
+        )
         return res
 
     def _trace_loops(self, sn, se, blocked, bedges):
-        """Edges that are part of a loop (non-bridge edges) in the connected area."""
+        """Edges that are part of a loop (non-bridge edges) in the connected
+        area."""
         if sn or se:
             _area_n, area_e = self._bfs(sn, se, blocked, bedges)
         else:
@@ -807,8 +1068,12 @@ class Network:
             res.lines |= info["lines"]
             res.points |= info["points"]
         res.extra = {"names": sorted(names)}
-        res.message = ("Subnetwork(s): %s - %d feature(s)." % (", ".join(sorted(names)), res.count())
-                       if names else "The start is not inside any subnetwork.")
+        res.message = (
+            "Subnetwork(s): %s - %d feature(s)."
+            % (", ".join(sorted(names)), res.count())
+            if names
+            else "The start is not inside any subnetwork."
+        )
         return res
 
     def _trace_controllers(self, sn, se, blocked, bedges):
@@ -822,13 +1087,18 @@ class Network:
         for n in names:
             res.points.add(subs["subnetworks"][n]["controller"])
         res.extra = {"names": sorted(names)}
-        res.message = ("%d controller(s) feed the start: %s." % (len(res.points), ", ".join(sorted(names)))
-                       if names else "No controller feeds the start.")
+        res.message = (
+            "%d controller(s) feed the start: %s."
+            % (len(res.points), ", ".join(sorted(names)))
+            if names
+            else "No controller feeds the start."
+        )
         return res
 
     # ------------------------------------------------------------ subnetworks
     def subnetworks(self, name_of=None):
-        """Every controller feeds the area reachable through lines of its tier."""
+        """Every controller feeds the area reachable through lines of its
+        tier."""
         closed = self.closed_nodes()
         controllers = self.controller_points()
         ctrl_nodes = {self.point_node[pi] for pi in controllers}
@@ -836,32 +1106,56 @@ class Network:
         for pi in controllers:
             p = self.points[pi]
             tier = self.tiers.get((p["key"][0], p["ag"]))
-            name = (self.controllers.get(p["key"]) or (name_of(p) if name_of else None) or p.get("assetid")
-                    or "%s-%s" % p["key"])
+            name = (
+                self.controllers.get(p["key"])
+                or (name_of(p) if name_of else None)
+                or p.get("assetid")
+                or "%s-%s" % p["key"]
+            )
 
             def ok(eid, tier=tier):
                 e = self.edges[eid]
                 if e["line"] is None:
                     return True
-                lt = self.tiers.get((self.lines[e["line"]]["key"][0], self.lines[e["line"]]["ag"]))
+                lt = self.tiers.get(
+                    (
+                        self.lines[e["line"]]["key"][0],
+                        self.lines[e["line"]]["ag"],
+                    )
+                )
                 return tier is None or lt is None or lt == tier
 
             start = self.point_node[pi]
-            nodes, edges = self._bfs({start}, (), (closed | ctrl_nodes) - {start}, (), ok)
+            nodes, edges = self._bfs(
+                {start}, (), (closed | ctrl_nodes) - {start}, (), ok
+            )
             r = self._collect(nodes, edges)
-            info = out["subnetworks"].setdefault(name, {"lines": set(), "points": set(), "tier": tier,
-                                                        "controller": p["key"], "customers": 0})
+            info = out["subnetworks"].setdefault(
+                name,
+                {
+                    "lines": set(),
+                    "points": set(),
+                    "tier": tier,
+                    "controller": p["key"],
+                    "customers": 0,
+                },
+            )
             info["lines"] |= r.lines
             info["points"] |= r.points
             for k in r.lines | r.points:
                 out["by_key"][k].add(name)
-        cust = {self.points[pi]["key"] for pi in range(len(self.points)) if "customer" in self.point_cats(pi)}
+        cust = {
+            self.points[pi]["key"]
+            for pi in range(len(self.points))
+            if "customer" in self.point_cats(pi)
+        }
         for info in out["subnetworks"].values():
             info["customers"] = len(info["points"] & cust)
         return out
 
     def subnetwork_issues(self, subs=None):
-        """E14: fed by more than one controller where the tier does not allow it;
+        """E14: fed by more than one controller where the tier does not allow
+        it;
         E16: features of a tier that requires a controller but have none."""
         subs = subs or self.subnetworks()
         out = []
@@ -871,55 +1165,144 @@ class Network:
             pos[p["key"]] = (p["x"], p["y"], "point")
         for ln in self.lines:
             if ln["parts"] and ln["parts"][0]:
-                pos[ln["key"]] = (ln["parts"][0][0][0], ln["parts"][0][0][1], "line")
+                pos[ln["key"]] = (
+                    ln["parts"][0][0][0],
+                    ln["parts"][0][0][1],
+                    "line",
+                )
         for key, names in subs["by_key"].items():
             if len(names) < 2:
                 continue
             tiers = {tier_of.get(n) for n in names}
-            # no tier = one system (e.g. several tanks feeding one looped water network): allowed
-            if all(t is None or self.tier_settings.get(t, {}).get("multi", False) for t in tiers):
+            # no tier = one system (e.g. several tanks feeding one looped water
+            # network): allowed
+            if all(
+                t is None or self.tier_settings.get(t, {}).get("multi", False)
+                for t in tiers
+            ):
                 continue
             x, y, g = pos.get(key, (0, 0, "point"))
-            out.append({"code": "E14", "severity": "error", "message": "Fed by more than one controller: %s"
-                        % ", ".join(sorted(names)), "x": x, "y": y, "key": key, "geom": g})
-        required = {t for t, s in self.tier_settings.items() if s.get("require")}
+            out.append(
+                {
+                    "code": "E14",
+                    "severity": "error",
+                    "message": (
+                        "Fed by more than one controller: %s"
+                        % ", ".join(sorted(names))
+                    ),
+                    "x": x,
+                    "y": y,
+                    "key": key,
+                    "geom": g,
+                }
+            )
+        required = {
+            t for t, s in self.tier_settings.items() if s.get("require")
+        }
         if required:
             for ln in self.lines:
                 t = self.tiers.get((ln["key"][0], ln["ag"]))
-                if t in required and ln["key"] not in subs["by_key"] and ln["key"] in pos:
+                if (
+                    t in required
+                    and ln["key"] not in subs["by_key"]
+                    and ln["key"] in pos
+                ):
                     x, y, g = pos[ln["key"]]
-                    out.append({"code": "E16", "severity": "warning", "message": "No controller feeds this "
-                                "feature (tier %s)" % t, "x": x, "y": y, "key": ln["key"], "geom": "line"})
+                    out.append(
+                        {
+                            "code": "E16",
+                            "severity": "warning",
+                            "message": (
+                                "No controller feeds this feature (tier %s)"
+                                % t
+                            ),
+                            "x": x,
+                            "y": y,
+                            "key": ln["key"],
+                            "geom": "line",
+                        }
+                    )
         return out
 
     # ------------------------------------------------------------- validation
-    def validate(self, rules=None, check_dangles=True, check_islands=True, names=None):
-        """List of issues: dict(code, severity, message, x, y, key, geom='point'|'line')."""
+    def validate(
+        self, rules=None, check_dangles=True, check_islands=True, names=None
+    ):
+        """List of issues: dict(code, severity, message, x, y, key,
+        geom='point'|'line')."""
         issues = []
         tol = self.tol
 
         def add(code, sev, msg, x, y, key, geom="point"):
-            issues.append({"code": code, "severity": sev, "message": msg, "x": x, "y": y,
-                           "key": key, "geom": geom})
+            issues.append(
+                {
+                    "code": code,
+                    "severity": sev,
+                    "message": msg,
+                    "x": x,
+                    "y": y,
+                    "key": key,
+                    "geom": geom,
+                }
+            )
 
         # geometry problems
         for li, ln in enumerate(self.lines):
             parts = [p for p in ln["parts"] if len(p) >= 2]
             if not parts:
-                add("E09", "error", "Line without a valid geometry", 0, 0, ln["key"], "line")
+                add(
+                    "E09",
+                    "error",
+                    "Line without a valid geometry",
+                    0,
+                    0,
+                    ln["key"],
+                    "line",
+                )
                 continue
             if len(ln["parts"]) > 1:
                 x, y = parts[0][0]
-                add("E09", "warning", "Multipart line (each part is treated separately)", x, y, ln["key"], "line")
-            if sum(self.edges[e]["length"] for e in self.line_edges.get(li, ())) <= tol:
+                add(
+                    "E09",
+                    "warning",
+                    "Multipart line (each part is treated separately)",
+                    x,
+                    y,
+                    ln["key"],
+                    "line",
+                )
+            if (
+                sum(
+                    self.edges[e]["length"]
+                    for e in self.line_edges.get(li, ())
+                )
+                <= tol
+            ):
                 x, y = parts[0][0]
-                add("E09", "error", "Zero-length line", x, y, ln["key"], "line")
+                add(
+                    "E09", "error", "Zero-length line", x, y, ln["key"], "line"
+                )
             if ln.get("ag") is None:
                 x, y = parts[0][0]
-                add("E06", "error", "Asset group is empty", x, y, ln["key"], "line")
+                add(
+                    "E06",
+                    "error",
+                    "Asset group is empty",
+                    x,
+                    y,
+                    ln["key"],
+                    "line",
+                )
         for p in self.points:
             if p.get("ag") is None:
-                add("E06", "error", "Asset group is empty", p["x"], p["y"], p["key"])
+                add(
+                    "E06",
+                    "error",
+                    "Asset group is empty",
+                    p["x"],
+                    p["y"],
+                    p["key"],
+                )
 
         # unconnected ends / points, missing vertices, gaps
         ev_tokens = {t for t, _l in getattr(self, "_endvertex_hits", [])}
@@ -927,7 +1310,11 @@ class Network:
             if self._partners.get(token) or token in ev_tokens:
                 continue
             is_point = token[0] == "P"
-            key = self.points[token[1]]["key"] if is_point else self.lines[token[1]]["key"]
+            key = (
+                self.points[token[1]]["key"]
+                if is_point
+                else self.lines[token[1]]["key"]
+            )
             on_segment = None
             gap_d = INF
             for x1, y1, x2, y2, (li, pt, _s) in self._sgrid.near(x, y):
@@ -942,17 +1329,50 @@ class Network:
                     continue
                 gap_d = min(gap_d, math.hypot(px - x, py - y))
             if on_segment is not None:
-                add("E03", "error", "Touches line %s:%s between vertices (needs a vertex / split)" % on_segment,
-                    x, y, key)
-            elif gap_d <= tol and not is_point and any(ln.get("levels") for ln in self.lines[:1]):
-                add("E21", "warning", "Meets another line end at a different elevation level (F_ELEV / T_ELEV): "
-                    "not connected", x, y, key)
+                add(
+                    "E03",
+                    "error",
+                    "Touches line %s:%s between vertices (needs a vertex /"
+                    " split)" % on_segment,
+                    x,
+                    y,
+                    key,
+                )
+            elif (
+                gap_d <= tol
+                and not is_point
+                and any(ln.get("levels") for ln in self.lines[:1])
+            ):
+                add(
+                    "E21",
+                    "warning",
+                    "Meets another line end at a different elevation level"
+                    " (F_ELEV / T_ELEV): not connected",
+                    x,
+                    y,
+                    key,
+                )
             elif gap_d <= self.gap:
-                add("E07", "error", "Gap of %.3f to the nearest feature (not connected)" % gap_d, x, y, key)
+                add(
+                    "E07",
+                    "error",
+                    "Gap of %.3f to the nearest feature (not connected)"
+                    % gap_d,
+                    x,
+                    y,
+                    key,
+                )
             elif is_point:
                 cats = self.point_cats(token[1])
                 if "structure" not in cats:
-                    add("E02", "error", "Point is not connected to any line", x, y, key)
+                    add(
+                        "E02",
+                        "error",
+                        "Point is not connected to any line",
+                        x,
+                        y,
+                        key,
+                    )
             elif check_dangles and self.flow != "undirected":
                 add("E01", "warning", "Dangling line end", x, y, key)
 
@@ -963,17 +1383,35 @@ class Network:
             else:
                 x, y = self.lines[token[1]]["parts"][token[2]][token[3]]
                 key = self.lines[token[1]]["key"]
-            add("E15", "error", "Connects in the middle of %s:%s, which only connects at its ends" %
-                self.lines[li]["key"], x, y, key)
+            add(
+                "E15",
+                "error",
+                "Connects in the middle of %s:%s, which only connects at its"
+                " ends"
+                % self.lines[li]["key"],
+                x,
+                y,
+                key,
+            )
 
         # lines attached to a device with terminals but matching none of them
         for pi, li in getattr(self, "terminal_issues", []):
             p = self.points[pi]
-            add("E11", "error", "Line tier matches no terminal of the device (check the line asset group)",
-                p["x"], p["y"], self.lines[li]["key"])
+            add(
+                "E11",
+                "error",
+                "Line tier matches no terminal of the device (check the line"
+                " asset group)",
+                p["x"],
+                p["y"],
+                self.lines[li]["key"],
+            )
 
-        # size changes where two lines meet without a fitting (pipes / cables only, not roads)
-        for n in (range(len(self.node_xy)) if self.flow != "undirected" else ()):
+        # size changes where two lines meet without a fitting (pipes / cables
+        # only, not roads)
+        for n in (
+            range(len(self.node_xy)) if self.flow != "undirected" else ()
+        ):
             if self.node_points[n]:
                 continue
             sizes = {}
@@ -985,17 +1423,31 @@ class Network:
                     sizes[li] = self.lines[li]["size"]
             if len(set(sizes.values())) > 1:
                 x, y = self.node_xy[n]
-                add("E12", "warning", "Size changes (%s) without a fitting / reducer" %
-                    " / ".join("%g" % v for v in sorted(set(sizes.values()))), x, y,
-                    self.lines[next(iter(sizes))]["key"])
+                add(
+                    "E12",
+                    "warning",
+                    "Size changes (%s) without a fitting / reducer"
+                    % " / ".join(
+                        "%g" % v for v in sorted(set(sizes.values()))
+                    ),
+                    x,
+                    y,
+                    self.lines[next(iter(sizes))]["key"],
+                )
 
         # stacked devices
         for n, pts in enumerate(self.node_points):
             devs = [pi for pi in pts if "structure" not in self.point_cats(pi)]
             if len(devs) > 1:
                 x, y = self.node_xy[n]
-                add("E08", "warning", "%d point features at the same location" % len(devs), x, y,
-                    self.points[devs[0]]["key"])
+                add(
+                    "E08",
+                    "warning",
+                    "%d point features at the same location" % len(devs),
+                    x,
+                    y,
+                    self.points[devs[0]]["key"],
+                )
 
         # connectivity rules
         if rules:
@@ -1005,17 +1457,36 @@ class Network:
                 for eid, _m in self.adj[n]:
                     li = self.edges[eid]["line"]
                     if li is not None:
-                        groups.append(("L", li, (self.lines[li]["key"][0], self.lines[li]["ag"])))
+                        groups.append(
+                            (
+                                "L",
+                                li,
+                                (
+                                    self.lines[li]["key"][0],
+                                    self.lines[li]["ag"],
+                                ),
+                            )
+                        )
                 for pi in self.node_points[n]:
                     if "structure" not in self.point_cats(pi):
-                        groups.append(("P", pi, (self.points[pi]["key"][0], self.points[pi]["ag"])))
+                        groups.append(
+                            (
+                                "P",
+                                pi,
+                                (
+                                    self.points[pi]["key"][0],
+                                    self.points[pi]["ag"],
+                                ),
+                            )
+                        )
                 has_point = any(k == "P" for k, _i, _g in groups)
                 for i, (ka, ia, ga) in enumerate(groups):
                     for kb, ib, gb in groups[i + 1:]:
                         if (ka, ia) == (kb, ib) or (ka == "P" and kb == "P"):
                             continue
                         if ka == "L" and kb == "L" and has_point:
-                            continue  # lines meet through the junction / device there
+                            # lines meet through the junction / device there
+                            continue
                         if ga[1] is None or gb[1] is None:
                             continue
                         pair = tuple(sorted((ga, gb), key=str))
@@ -1023,11 +1494,26 @@ class Network:
                             continue
                         seen.add((n, pair))
                         x, y = self.node_xy[n]
-                        def nm(g):
-                            return "%s: %s" % (g[0], (names or {}).get(g, g[1]))
 
-                        add("E05", "error", "No connectivity rule between %s and %s" % (nm(ga), nm(gb)), x, y,
-                            (self.lines[ia]["key"] if ka == "L" else self.points[ia]["key"]))
+                        def nm(g):
+                            return "%s: %s" % (
+                                g[0],
+                                (names or {}).get(g, g[1]),
+                            )
+
+                        add(
+                            "E05",
+                            "error",
+                            "No connectivity rule between %s and %s"
+                            % (nm(ga), nm(gb)),
+                            x,
+                            y,
+                            (
+                                self.lines[ia]["key"]
+                                if ka == "L"
+                                else self.points[ia]["key"]
+                            ),
+                        )
 
         # islands without any source
         if check_islands and self.flow == "source":
@@ -1044,25 +1530,48 @@ class Network:
                 for li, ln in enumerate(self.lines):
                     if ln["key"] in keys:
                         x, y = ln["parts"][0][0]
-                        add("E10", "warning", "Not fed by any source (isolated island, %d lines)" % len(keys),
-                            x, y, ln["key"], "line")
+                        add(
+                            "E10",
+                            "warning",
+                            "Not fed by any source (isolated island, %d lines)"
+                            % len(keys),
+                            x,
+                            y,
+                            ln["key"],
+                            "line",
+                        )
         return issues
 
     def _near_points(self, x, y):
         return list(self._gap_grid.near(x, y, self.gap))
 
     def learn_rules(self):
-        """Connectivity rules found in the data: set of ((cls, ag), (cls, ag))."""
+        """Connectivity rules found in the data: set of ((cls, ag), (cls,
+        ag))."""
         found = set()
         for n in range(len(self.node_xy)):
             groups = set()
             for eid, _m in self.adj[n]:
                 li = self.edges[eid]["line"]
                 if li is not None and self.lines[li]["ag"] is not None:
-                    groups.add(("L", li, (self.lines[li]["key"][0], self.lines[li]["ag"])))
+                    groups.add(
+                        (
+                            "L",
+                            li,
+                            (self.lines[li]["key"][0], self.lines[li]["ag"]),
+                        )
+                    )
             for pi in self.node_points[n]:
-                if self.points[pi]["ag"] is not None and "structure" not in self.point_cats(pi):
-                    groups.add(("P", pi, (self.points[pi]["key"][0], self.points[pi]["ag"])))
+                if self.points[pi][
+                    "ag"
+                ] is not None and "structure" not in self.point_cats(pi):
+                    groups.add(
+                        (
+                            "P",
+                            pi,
+                            (self.points[pi]["key"][0], self.points[pi]["ag"]),
+                        )
+                    )
             groups = list(groups)
             has_point = any(k == "P" for k, _i, _g in groups)
             for i, (ka, ia, ga) in enumerate(groups):

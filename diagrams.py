@@ -1,16 +1,27 @@
-"""Network diagrams: a schematic (tree) drawing of a subnetwork or of a trace result.
+"""Network diagrams: a schematic (tree) drawing of a subnetwork or of a trace
+result.
 
-The diagram is written to two memory layers (nodes / links) placed to the right of the
-network, in the network CRS, so they can be printed or exported like any layer. Each node
+The diagram is written to two memory layers (nodes / links) placed to the right
+of the
+network, in the network CRS, so they can be printed or exported like any layer.
+Each node
 and link keeps the class / fid of the real feature."""
+
 from collections import defaultdict, deque
 
-from qgis.core import QgsFeature, QgsGeometry, QgsPointXY, QgsProject, QgsVectorLayer
+from qgis.core import (
+    QgsFeature,
+    QgsGeometry,
+    QgsPointXY,
+    QgsProject,
+    QgsVectorLayer,
+)
 from qgis.PyQt.QtGui import QColor
 
 
 def build(cfg, net, edges, root_nodes, spacing=None, title="Diagram"):
-    """edges: set of edge ids to draw; root_nodes: nodes where the tree starts (controllers / starts)."""
+    """edges: set of edge ids to draw; root_nodes: nodes where the tree starts
+    (controllers / starts)."""
     adj = defaultdict(list)
     for eid in edges:
         e = net.edges[eid]
@@ -38,7 +49,7 @@ def build(cfg, net, edges, root_nodes, spacing=None, title="Diagram"):
                 children[n].append(m)
                 tree_edges[m] = eid
                 q.append(m)
-    for n in list(adj):          # parts not reachable from the roots
+    for n in list(adj):  # parts not reachable from the roots
         if n not in seen:
             seen.add(n)
             depth[n] = 0
@@ -53,7 +64,8 @@ def build(cfg, net, edges, root_nodes, spacing=None, title="Diagram"):
                         children[a].append(m)
                         tree_edges[m] = eid
                         q.append(m)
-    # tidy layout: leaves get consecutive rows, parents sit in the middle of their children
+    # tidy layout: leaves get consecutive rows, parents sit in the middle of
+    # their children
     row = {}
     counter = [0]
 
@@ -63,7 +75,9 @@ def build(cfg, net, edges, root_nodes, spacing=None, title="Diagram"):
             v, done = stack.pop()
             if done or not children[v]:
                 if children[v]:
-                    row[v] = sum(row[c] for c in children[v]) / len(children[v])
+                    row[v] = sum(row[c] for c in children[v]) / len(
+                        children[v]
+                    )
                 else:
                     row[v] = counter[0]
                     counter[0] += 1
@@ -79,20 +93,39 @@ def build(cfg, net, edges, root_nodes, spacing=None, title="Diagram"):
     span = max(max(xs) - min(xs), max(ys) - min(ys), 1.0)
     step = spacing or span / max(10, counter[0])
     ox, oy = max(xs) + span * 0.15, max(ys)
-    pos = {n: QgsPointXY(ox + depth[n] * step * 1.6, oy - row[n] * step) for n in row}
+    pos = {
+        n: QgsPointXY(ox + depth[n] * step * 1.6, oy - row[n] * step)
+        for n in row
+    }
 
     crs = cfg_crs(cfg)
-    nodes_l = QgsVectorLayer("Point?crs=%s&field=node:integer&field=class_name:string&field=fid:long"
-                             "&field=label:string&field=depth:integer" % crs, "%s - nodes" % title, "memory")
-    links_l = QgsVectorLayer("LineString?crs=%s&field=class_name:string&field=fid:long&field=label:string"
-                             % crs, "%s - links" % title, "memory")
+    nodes_l = QgsVectorLayer(
+        "Point?crs=%s&field=node:integer&field=class_name:string&field=fid:long"  # noqa
+        "&field=label:string&field=depth:integer" % crs,
+        "%s - nodes" % title,
+        "memory",
+    )
+    links_l = QgsVectorLayer(
+        "LineString?crs=%s&field=class_name:string&field=fid:long&field=label:string"  # noqa: E501
+        % crs,
+        "%s - links" % title,
+        "memory",
+    )
     nf = []
     for n, p in pos.items():
         f = QgsFeature(nodes_l.fields())
         pts = net.node_points[n]
         if pts:
             pt = net.points[pts[0]]
-            f.setAttributes([n, pt["key"][0], pt["key"][1], cfg.label(pt["key"][0], pt["ag"]), depth[n]])
+            f.setAttributes(
+                [
+                    n,
+                    pt["key"][0],
+                    pt["key"][1],
+                    cfg.label(pt["key"][0], pt["ag"]),
+                    depth[n],
+                ]
+            )
         else:
             f.setAttributes([n, None, None, "", depth[n]])
         f.setGeometry(QgsGeometry.fromPointXY(p))
@@ -106,11 +139,24 @@ def build(cfg, net, edges, root_nodes, spacing=None, title="Diagram"):
         key = net.edge_key(eid)
         f = QgsFeature(links_l.fields())
         ln = net.lines[e["line"]] if e["line"] is not None else None
-        f.setAttributes([key[0] if key else None, key[1] if key else None,
-                         cfg.label(key[0], ln["ag"]) if ln else "association"])
+        f.setAttributes(
+            [
+                key[0] if key else None,
+                key[1] if key else None,
+                cfg.label(key[0], ln["ag"]) if ln else "association",
+            ]
+        )
         a, b = pos[parent], pos[child]
-        f.setGeometry(QgsGeometry.fromPolylineXY([a, QgsPointXY(a.x() + (b.x() - a.x()) / 2, a.y()),
-                                                  QgsPointXY(a.x() + (b.x() - a.x()) / 2, b.y()), b]))
+        f.setGeometry(
+            QgsGeometry.fromPolylineXY(
+                [
+                    a,
+                    QgsPointXY(a.x() + (b.x() - a.x()) / 2, a.y()),
+                    QgsPointXY(a.x() + (b.x() - a.x()) / 2, b.y()),
+                    b,
+                ]
+            )
+        )
         lf.append(f)
     nodes_l.dataProvider().addFeatures(nf)
     links_l.dataProvider().addFeatures(lf)
@@ -124,13 +170,19 @@ def build(cfg, net, edges, root_nodes, spacing=None, title="Diagram"):
 
 def cfg_crs(cfg):
     from .qgis_io import class_layers
+
     layers = class_layers(cfg)
     lyr = layers.get("Line") or next(iter(layers.values()))
     return lyr.crs().authid() or lyr.crs().toWkt()
 
 
 def _labels(lyr):
-    from qgis.core import QgsPalLayerSettings, QgsTextFormat, QgsVectorLayerSimpleLabeling
+    from qgis.core import (
+        QgsPalLayerSettings,
+        QgsTextFormat,
+        QgsVectorLayerSimpleLabeling,
+    )
+
     s = QgsPalLayerSettings()
     s.fieldName = "label"
     fmt = QgsTextFormat()
