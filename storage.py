@@ -106,12 +106,12 @@ def pg_parts(path):
     return out
 
 
-def pg_string(host="localhost", port="5432", dbname="", user="", password="", schema="network"):
+def pg_string(host="localhost", port="5432", dbname="", user=None, secret=None, schema="network"):
     parts = ["host=%s" % host, "port=%s" % port, "dbname=%s" % dbname]
     if user:
         parts.append("user=%s" % user)
-    if password:
-        parts.append("password=%s" % password)
+    if secret:
+        parts.append("password=%s" % secret)
     parts.append("active_schema=%s" % schema.lower())
     return "PG:" + " ".join(parts)
 
@@ -274,8 +274,8 @@ def _create_container(fmt, path):
         ds.ExecuteSQL('CREATE SCHEMA IF NOT EXISTS "%s"' % schema)
         try:
             ds.ExecuteSQL("CREATE EXTENSION IF NOT EXISTS postgis")
-        except Exception:
-            pass
+        except Exception as e:      # not allowed for this user: PostGIS must already be installed
+            gdal.Debug("NetworkStudio", "CREATE EXTENSION postgis: %s" % e)
         ds = None
         ds = gdal.OpenEx(path, gdal.OF_VECTOR | gdal.OF_UPDATE, allowed_drivers=["PostgreSQL"])
         if ds is None:

@@ -206,7 +206,7 @@ def setup_layer(cfg, role, cls, lyr, lookup=None):
 def _style_classes(lyr, groups, role):
     kind = gkind(lyr)
     cats = []
-    rnd = random.Random(hash(lyr.name()) & 0xFFFF)
+    rnd = random.Random(hash(lyr.name()) & 0xFFFF)  # nosec B311 - sample data / symbol colours, not security
     for code, name in groups:
         sym = QgsSymbol.defaultSymbol(lyr.geometryType())
         sym.setColor(QColor.fromHsv(rnd.randint(0, 359), 200, 200))

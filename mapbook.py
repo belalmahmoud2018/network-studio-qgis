@@ -105,8 +105,8 @@ def make_layout(cfg, grid, title, scale=1000, brand=None):
     sb.setLinkedMap(m)
     try:
         sb.setStyle("Single Box")
-    except Exception:
-        pass
+    except Exception as e:          # older QGIS: keep the default scale bar style
+        sb.setToolTip(str(e))
     sb.applyDefaultSize()
     sb.attemptMove(QgsLayoutPoint(12, 196, mm))
     layout.addLayoutItem(sb)

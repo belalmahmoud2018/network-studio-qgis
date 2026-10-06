@@ -32,7 +32,7 @@ def _pick(cfg, role, cat=None, name=None, tier=None, exclude=()):
 
 
 def create(path, key, authid="EPSG:32638", x0=500000.0, y0=2700000.0, blocks=4, block=100.0, seed=7):
-    rnd = random.Random(seed)
+    rnd = random.Random(seed)  # nosec B311 - sample data / symbol colours, not security
     tpl = T.BY_KEY[key]
     S.create_network(path, key, authid=authid, tolerance=0.001, gap=0.5, name="Demo %s" % tpl["label"])
     cfg = S.load_config(path)

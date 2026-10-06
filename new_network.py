@@ -50,7 +50,7 @@ class PgDialog(QDialog):
 
     def connection(self):
         return S.pg_string(self.host.text().strip(), self.port.text().strip() or "5432", self.db.text().strip(),
-                           self.user.text().strip(), self.pw.text(), self.schema.text().strip() or "network")
+                           self.user.text().strip() or None, self.pw.text() or None, self.schema.text().strip() or "network")
 
 
 class NewNetworkDialog(QDialog):

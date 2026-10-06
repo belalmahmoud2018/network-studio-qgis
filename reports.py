@@ -197,9 +197,18 @@ def report_text(cfg, rows, totals):
 
 
 # ---------------------------------------------------------------------- dashboard / QA
+def _optional_layer(cfg, name):
+    from .qgis_io import get_layer
+    try:
+        return get_layer(cfg.path, name)
+    except Exception as e:
+        from .qgis_io import log
+        log("%s: %s" % (name, e))
+        return None
+
+
 def dashboard(cfg):
     """Numbers for the project dashboard."""
-    from .qgis_io import get_layer
     out = {"classes": [], "lifecycle": {}, "errors": {}, "completeness": [], "isconnected": None}
     connected = total = 0
     req = cfg.required
@@ -223,9 +232,8 @@ def dashboard(cfg):
             out["completeness"].append({"Class": cls, "Field": fld, "Filled": k, "Features": n,
                                         "Percent": round(100.0 * k / n, 1) if n else 100.0})
     for name in ("un_errors_point", "un_errors_line"):
-        try:
-            lyr = get_layer(cfg.path, name)
-        except Exception:
+        lyr = _optional_layer(cfg, name)
+        if lyr is None:             # error layer not created yet: nothing to count
             continue
         for f in lyr.getFeatures():
             key = (f["code"], f["severity"])
