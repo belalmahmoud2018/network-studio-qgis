@@ -39,6 +39,22 @@ def log(msg, warning=False):
     QgsMessageLog.logMessage(str(msg), TAG, level)
 
 
+def make_field(name, kind="double", length=0):
+    """QgsField for QGIS 3 (QVariant) and QGIS 3.38+ / 4 (QMetaType)."""
+    from qgis.core import QgsField
+
+    mt = {"double": "Double", "int": "Int", "string": "QString"}[kind]
+    try:
+        from qgis.PyQt.QtCore import QMetaType
+
+        return QgsField(name, getattr(QMetaType.Type, mt), len=length)
+    except (TypeError, AttributeError, ImportError):
+        from qgis.PyQt.QtCore import QVariant
+
+        vt = {"double": "Double", "int": "Int", "string": "String"}[kind]
+        return QgsField(name, getattr(QVariant, vt), len=length)
+
+
 def gkind(layer_or_geom):
     v = (
         layer_or_geom.geometryType()
@@ -146,6 +162,14 @@ def load_network(cfg, iface=None):
     clear_cache(cfg.path)
     root = QgsProject.instance().layerTreeRoot()
     title = cfg.settings.get("name") or cfg.tpl["label"]
+    try:
+        from . import versioning
+
+        ver = versioning.info(cfg.path).get("version")
+    except Exception:  # an unreadable info table only changes the title
+        ver = None
+    if ver:
+        title += " [version %s]" % ver
     group = root.findGroup(title) or root.insertGroup(0, title)
     order = [
         "Device",
@@ -217,10 +241,18 @@ def refresh_forms(cfg):
 
 
 def setup_layer(cfg, role, cls, lyr, lookup=None):
+    from . import attribute_rules as AR
+
+    AR.clear_layer(lyr)
     fields = lyr.fields()
 
     def idx(name):
         return fields.indexFromName(name)
+
+    if idx("globalid") >= 0:
+        lyr.setDefaultValueDefinition(
+            idx("globalid"), QgsDefaultValue("uuid()")
+        )
 
     groups = cfg.groups(cls)
     if idx("assetgroup") >= 0:
@@ -248,7 +280,7 @@ def setup_layer(cfg, role, cls, lyr, lookup=None):
                     "AllowNull": False,
                     "OrderByValue": False,
                     "FilterExpression": (
-                        "\"class_name\" = '%s' AND \"ag_code\" ="
+                        '"class_name" = \'%s\' AND "ag_code" ='
                         " current_value('assetgroup')" % cls
                     ),
                 },
@@ -290,6 +322,8 @@ def setup_layer(cfg, role, cls, lyr, lookup=None):
         lyr.setDefaultValueDefinition(
             idx("measuredlength"), QgsDefaultValue("round($length, 3)", True)
         )
+    AR.register_layers(cfg, {role: lyr})
+    AR.apply_layer(lyr, cls, getattr(cfg, "attribute_rules", []))
     _style_classes(lyr, groups, role)
 
 
@@ -554,11 +588,12 @@ def result_layers(cfg, res, title, layers=None):
     return made
 
 
-def write_errors(cfg, issues, areas=None):
+def write_errors(cfg, issues, areas=None, codes=None):
     """Replace the content of the error layers with `issues`.
 
     areas: list of QgsRectangle -> only errors inside these areas are replaced
-    (dirty areas).
+    (dirty areas). codes: only errors whose code starts with one of these
+    prefixes are replaced (e.g. ("T",) for topology rules); None = all.
     Errors marked as exceptions are left out."""
     issues = [
         it
@@ -579,6 +614,8 @@ def write_errors(cfg, issues, areas=None):
         lyr = get_layer(cfg.path, name)
         prov = lyr.dataProvider()
         old = list(lyr.getFeatures())
+        if codes:
+            old = [f for f in old if str(f["code"] or "").startswith(codes)]
         if areas:
             old = [
                 f

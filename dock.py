@@ -69,6 +69,7 @@ from . import (
     workorders,
 )
 from . import templates as T
+from .dock_extra import ExtraPages
 from .editing import SmartEditor
 from . import qgis_io as Q
 from . import storage as S
@@ -123,7 +124,7 @@ class Busy:
         QApplication.restoreOverrideCursor()
 
 
-class NetworkDock(QDialog):
+class NetworkDock(ExtraPages, QDialog):
     """Floating, non-modal window: the map stays usable (needed to pick trace
     points)."""
 
@@ -152,14 +153,17 @@ class NetworkDock(QDialog):
             ("1  SET UP", None),
             ("Network", self._tab_network),
             ("Model", self._tab_model),
+            ("Attribute rules", self._tab_attr_rules),
             ("Company and branding", self._tab_branding),
             ("2  DATA", None),
             ("Import", self._tab_data),
             ("3  EDIT", None),
+            ("Versions", self._tab_versions),
             ("Editing", self._tab_editing),
             ("Asset IDs and fields", self._tab_fields),
             ("4  QUALITY", None),
             ("Prepare and validate", self._tab_validate),
+            ("Topology rules", self._tab_topology),
             ("Associations", self._tab_assoc),
             ("5  ANALYSIS", None),
             ("Trace", self._tab_trace),
@@ -167,6 +171,7 @@ class NetworkDock(QDialog):
             ("Diagrams", self._tab_diagrams),
             ("Profiles", self._tab_profiles),
             ("Criticality and risk", self._tab_risk),
+            ("Hydraulic analysis", self._tab_hydro),
             ("Hydraulic model", self._tab_export),
             ("6  DESIGN", None),
             ("Service connections", self._tab_services),
@@ -336,15 +341,25 @@ class NetworkDock(QDialog):
                 ),
                 (
                     "geometryChanged",
-                    lambda fid, g, l=lyr: self._dirty_feature(l, fid, g),  # noqa
+                    lambda fid, g, l=lyr: self._dirty_feature(  # noqa
+                        l, fid, g
+                    ),
                 ),
                 (
                     "attributeValueChanged",
-                    lambda fid, i, v, l=lyr: self._dirty_attribute(l, fid, i),  # noqa
+                    lambda fid, i, v, l=lyr: self._dirty_attribute(  # noqa
+                        l, fid, i
+                    ),
                 ),
                 (
                     "afterCommitChanges",
                     lambda *_a: QTimer.singleShot(0, self._commit_dirty),
+                ),
+                (
+                    "beforeCommitChanges",
+                    lambda *_a, l=lyr, c=cls: self._check_rules_on_commit(  # noqa
+                        l, c
+                    ),
                 ),
             ]
             for sig, slot in slots:
@@ -691,9 +706,15 @@ class NetworkDock(QDialog):
         except Exception as e:
             Q.log("Work orders: %s" % e, True)
         self._refresh_wo()
+        self._apply_protection()
         self.status.setText(
-            "Network: %s  |  %s  |  %s"
-            % (cfg.settings.get("name", ""), tpl["label"], path)
+            "Network: %s%s  |  %s  |  %s"
+            % (
+                cfg.settings.get("name", ""),
+                self.version_label(path),
+                tpl["label"],
+                path,
+            )
         )
         if "Line" in cfg.classes:
             lyr = Q.get_layer(cfg.path, cfg.classes["Line"])
@@ -905,6 +926,7 @@ class NetworkDock(QDialog):
             % cfg.tpl["service"]
         )
         self._fill_subnetworks()
+        self._extra_refresh()
 
     # ================================================================ Data
     def _tab_data(self):
@@ -1155,8 +1177,13 @@ class NetworkDock(QDialog):
             " required)"
         )
         self.val_subs.setChecked(True)
+        self.val_ar = QCheckBox(
+            "Check attribute rules (constraint and validation rules)"
+        )
+        self.val_ar.setChecked(True)
         vl2 = vbox.layout()
         vl2.insertWidget(vl2.count() - 1, self.val_subs)
+        vl2.insertWidget(vl2.count() - 1, self.val_ar)
         vl2.insertWidget(vl2.count() - 1, self.val_dirty)
         self.dirty_label = QLabel()
         vl2.addWidget(self.dirty_label)
@@ -1236,6 +1263,14 @@ class NetworkDock(QDialog):
                 self.val_subs.isChecked() or full
             ) and self.cfg.flow != "undirected":
                 issues += net.subnetwork_issues()
+            if (self.val_ar.isChecked() or full) and self.cfg.attribute_rules:
+                from . import attribute_rules as AR
+
+                layers = Q.class_layers(self.cfg)
+                AR.register_layers(self.cfg, layers)
+                issues += AR.evaluate(
+                    self.cfg, layers, self.cfg.attribute_rules, calculate=False
+                )[0]
             areas = None
             self._resolve_dirty()
             if self.val_dirty.isChecked() and not full:
@@ -1251,7 +1286,7 @@ class NetworkDock(QDialog):
                 if (it["code"], it["key"][0], it["key"][1])
                 in self.cfg.exceptions
             )
-            Q.write_errors(self.cfg, issues, areas)
+            Q.write_errors(self.cfg, issues, areas, codes=("E", "AR"))
             Q.write_dirty_areas(self.cfg, [], replace=True)
             self._dirty = []
             self._update_dirty_label()
@@ -4288,6 +4323,7 @@ class NetworkDock(QDialog):
         form.addRow(self.pb_edit)
         form.addRow(self.pb_wo)
         lay.addLayout(form)
+        self._web_box(lay)
         b = QPushButton("Save the project for web publishing...")
         b.clicked.connect(self._publish)
         lay.addWidget(b)
@@ -4322,6 +4358,9 @@ class NetworkDock(QDialog):
                 self.pb_abstract.text().strip(),
                 self.pb_edit.isChecked(),
                 self.pb_wo.isChecked(),
+                edit_ids=self._web_edit_ids(),
+                capabilities=self._web_caps(),
+                lizmap=self.web_lizmap.isChecked(),
             )
             self.pb_out.setText(
                 "Saved %s with %d published layer(s).\n%s" % (path, n, note)

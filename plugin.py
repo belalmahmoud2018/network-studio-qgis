@@ -27,8 +27,14 @@ class NetworkStudioPlugin:
         self.toolbar.setObjectName("NetworkStudioToolbar")
         self.toolbar.addAction(self.action)
         self.toolbar.setVisible(True)
+        from . import attribute_rules
+
+        attribute_rules.register_functions()
 
     def unload(self):
+        from . import attribute_rules
+
+        attribute_rules.unregister_functions()
         if self.dock is not None:
             self.dock.close()
             self.dock.deleteLater()

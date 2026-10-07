@@ -1,23 +1,30 @@
-Network Studio 0.6 - utility network management for QGIS
+Network Studio 1.2 - utility network management for QGIS
 ========================================================
 
 Window sections (in the order of a project)
   OVERVIEW     Dashboard (project figures, QA report)
   1 SET UP     Network (new / demo / open / recent, backups, field project, topology)
                Model (groups, types, categories, tiers, terminals, attributes, rules, required fields)
+               Attribute rules (calculation, constraint and validation rules, ready-made rules)
                Company and branding (name, logo, client, project: map book and Excel)
   2 DATA       Import (existing layers, automatic asset group matching, ArcGIS File Geodatabase:
                utility network classes, associations CSV, Network Analyst streets)
-  3 EDIT       Editing (smart editing, editor tracking, upgrade)
+  3 EDIT       Versions (design projects: new / open version, compare, reconcile, post,
+               conflicts, design status, protected Default)
+               Editing (smart editing, editor tracking, upgrade)
                Asset IDs and fields (ID generator, bulk field calculator)
   4 QUALITY    Prepare and validate (gaps, vertices, 20 checks, dirty areas, exceptions, verify)
+               Topology rules (14 rules between any layers: overlaps, gaps, inside, on line...)
                Associations
   5 ANALYSIS   Trace, Subnetworks, Diagrams, Profiles (sewer / storm), Criticality and risk,
+               Hydraulic analysis (built-in solver: pressures, velocities, pumps, PRVs, tanks,
+               24 h simulation, fire flow, calibration; low / medium pressure gas)
                Hydraulic model (EPANET / SWMM export, EPANET results back on the map)
   6 DESIGN     Service connections, Cost estimate (unit prices x quantities)
   7 OPERATIONS Work orders, Edit history (audit trail with old / new values)
   8 DELIVER    Reports (summary, BOQ, errors, data dictionary, QA), Map book (PDF),
-               Web publishing (QGIS Server WMS / WFS / WFS-T, Lizmap)
+               Web publishing (QGIS Server WMS / WFS / WFS-T, Lizmap, web editing,
+               PostGIS triggers, check for edits made outside QGIS)
                ArcGIS asset package (export, plus an ArcPy script that adds the subtypes)
 
 Several domain networks in one file / schema (New network > Add to an existing file):
@@ -51,6 +58,12 @@ ArcGIS Pro utility network tools and their place in Network Studio
   Update Subnetwork ................. Subnetworks > Update subnetworks
   Validate Network Topology ......... Prepare and validate > Validate (full or dirty areas)
   Verify Network Topology ........... Prepare and validate > Verify
+  Create / Delete Version ........... Versions > New version / Delete version
+  Change Version (switch) ........... Versions > Open selected version / Back to Default
+  Reconcile / Post Version .......... Versions > Reconcile / Post / Reconcile and post
+  Version Changes ................... Versions > Compare with Default
+  Add / Alter Attribute Rule ........ Attribute rules > Add rule / Edit
+  Evaluate Rules .................... Attribute rules > Evaluate rules now
 
 Error codes
   E01 dangling line end         E09 geometry problem (zero length, multipart)
@@ -64,6 +77,14 @@ Error codes
   E17 duplicate asset id        E19 lines crossing without a junction
   E18 overlapping lines         E20 very short line
   E21 line ends at the same place on different elevation levels (F_ELEV / T_ELEV)
+  AR  attribute rule broken (constraint or validation rule)
+  T01-T14 general topology rules (Topology rules page)
+
+Versions
+  A version is a full copy of the network (<file>_versions/<name>.gpkg, or the schema
+  <schema>_v_<name> in PostGIS), so every tool works inside it. Features are matched by
+  globalid. A version can be made from another version (its parent). Features edited on
+  both sides are merged field by field; only fields changed differently are conflicts.
 
 Backups
   Automatic copies are made in <network file>_backups before prepare, import,

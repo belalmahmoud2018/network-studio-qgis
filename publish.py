@@ -20,14 +20,27 @@ from .qgis_io import project_layer
 
 
 def publish(
-    cfg, folder, title, abstract="", editable=False, include_work_orders=True
+    cfg,
+    folder,
+    title,
+    abstract="",
+    editable=False,
+    include_work_orders=True,
+    edit_ids=None,
+    capabilities=None,
+    lizmap=False,
 ):
+    """editable: WFS-T on the layers `edit_ids` (all published layers when
+    None) with `capabilities` (create / attributes / geometry / delete);
+    lizmap: also write the Lizmap configuration."""
     prj = QgsProject.instance()
     names = list(cfg.classes.values()) + (
         ["un_work_orders"] if include_work_orders else []
     )
     layers = [
-        l for l in (project_layer(cfg.path, n) for n in names) if l is not None  # noqa
+        x
+        for x in (project_layer(cfg.path, n) for n in names)
+        if x is not None
     ]
     if not layers:
         raise ValueError("Add the network layers to the map first.")
@@ -57,13 +70,29 @@ def publish(
     prj.writeEntry("WFSLayers", "/", ids)
     for i in ids:
         prj.writeEntry("WFSLayersPrecision", "/" + i, 3)
-    if editable:
-        for key in (
-            "WFSTLayers/Update",
-            "WFSTLayers/Insert",
-            "WFSTLayers/Delete",
-        ):
-            prj.writeEntry(key.split("/")[0], "/" + key.split("/")[1], ids)
+    capabilities = capabilities or {}
+    edit = [i for i in ids if edit_ids is None or i in edit_ids]
+    if not editable:
+        edit = []
+    upd = (
+        edit
+        if (
+            capabilities.get("attributes", True)
+            or capabilities.get("geometry", True)
+        )
+        else []
+    )
+    prj.writeEntry("WFSTLayers", "/Update", upd)
+    prj.writeEntry(
+        "WFSTLayers",
+        "/Insert",
+        edit if capabilities.get("create", True) else [],
+    )
+    prj.writeEntry(
+        "WFSTLayers",
+        "/Delete",
+        edit if capabilities.get("delete", True) else [],
+    )
     try:
         prj.setFilePathStorage(Qgis.FilePathType.Relative)
     except AttributeError:
@@ -75,6 +104,25 @@ def publish(
     )
     if not prj.write(path):
         raise ValueError("Could not save the project: %s" % prj.error())
+    extra = []
+    if S.is_pg(cfg.path):
+        from .webedit import use_postgres_provider
+
+        n = use_postgres_provider(path)
+        if n:
+            extra.append(
+                "%d PostGIS layer(s) use the PostgreSQL provider in the web"
+                " project." % n
+            )
+    if lizmap:
+        from .webedit import lizmap_config
+
+        cfg_path = lizmap_config(path, layers, set(edit), capabilities, title)
+        extra.append(
+            "Lizmap configuration: %s (%d editable layer(s)). Open the"
+            " project once with the Lizmap plugin to review it."
+            % (os.path.basename(cfg_path), len(edit))
+        )
     note = (
         "The data is in PostGIS: the server reads it directly (check the"
         " server can reach the database)."
@@ -84,4 +132,9 @@ def publish(
             " is relative)."
         )
     )
-    return path, len(ids), note
+    if editable and not S.is_pg(cfg.path):
+        extra.append(
+            "Several people editing on the web at the same time need"
+            " PostGIS; with a file keep web editing to one person."
+        )
+    return path, len(ids), " ".join([note] + extra)

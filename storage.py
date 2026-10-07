@@ -213,6 +213,15 @@ def open_ds(path, update=False):
     return ds
 
 
+def ident(name):
+    """A table / schema / column name that is safe inside SQL quotes."""
+    import re
+
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,62}", name or ""):
+        raise StoreError("Unexpected name in the database: %r" % name)
+    return name
+
+
 def _tn(ds, name):
     ns = getattr(ds, "_ns", None)
     return "%s__%s" % (name, ns) if ns and name.startswith("un_") else name
@@ -293,6 +302,19 @@ SYSTEM_TABLES = {
         ("old_value", ogr.OFTString),
         ("new_value", ogr.OFTString),
     ],
+    "un_attribute_rules": [
+        ("name", ogr.OFTString),
+        ("rule_type", ogr.OFTString),
+        ("class_name", ogr.OFTString),
+        ("field_name", ogr.OFTString),
+        ("expression", ogr.OFTString),
+        ("triggers", ogr.OFTString),
+        ("message", ogr.OFTString),
+        ("severity", ogr.OFTString),
+        ("enabled", ogr.OFTInteger),
+        ("rule_order", ogr.OFTInteger),
+        ("description", ogr.OFTString),
+    ],
     "un_subnetworks": [
         ("name", ogr.OFTString),
         ("tier", ogr.OFTString),
@@ -359,6 +381,11 @@ HIDDEN = (
     | {
         "un_dirty_areas",
         "un_work_orders",
+        "un_versions",
+        "un_version_info",
+        "un_version_base",
+        "un_feature_state",
+        "un_topology_rules",
         "feature_datasets",
         "feature_dataset_members",
         "layer_styles",
@@ -385,6 +412,17 @@ ASSET_FIELDS = [
 ]
 
 
+HYDRAULIC = ("water", "heating", "gas")  # pressure networks with a solver
+
+
+HYDRAULIC_DEVICE = [
+    ("demand", ogr.OFTReal, 0),
+    ("setting", ogr.OFTReal, 0),
+    ("pump_head", ogr.OFTReal, 0),
+    ("pump_flow", ogr.OFTReal, 0),
+]
+
+
 def class_fields(tpl, role):
     """[(name, ogr type, width)] for a network class."""
     f = list(TRACKING_FIELDS) + [
@@ -405,12 +443,16 @@ def class_fields(tpl, role):
             ("customerid", ogr.OFTString, 50),
             (size[0], ogr.OFTReal, 0),
         ]
+        if tpl.get("key") in HYDRAULIC:
+            f += list(HYDRAULIC_DEVICE)
     elif role == "Line":
         f += [
             (size[0], ogr.OFTReal, 0),
             ("measuredlength", ogr.OFTReal, 0),
             ("customerid", ogr.OFTString, 50),
         ]
+        if tpl.get("key") in HYDRAULIC:
+            f += [("roughness", ogr.OFTReal, 0)]
         if tpl["flow"] == "gravity":
             f += [
                 ("flowdirection", ogr.OFTInteger, 0),
@@ -997,6 +1039,7 @@ def load_config(path):
         tiers = _read_rows(ds, "un_tiers")
         ctrls = _read_rows(ds, "un_controllers")
         excs = _read_rows(ds, "un_error_exceptions")
+        attr_rules = _read_rows(ds, "un_attribute_rules")
     finally:
         ds = None
     classes = {
@@ -1035,6 +1078,12 @@ def load_config(path):
         for r in excs
         if r.get("feature_fid") is not None
     }
+    for r in attr_rules:
+        r["enabled"] = 0 if r.get("enabled") in (0, "0") else 1
+    cfg.attribute_rules = sorted(
+        attr_rules,
+        key=lambda r: (r.get("rule_order") or 0, r.get("name") or ""),
+    )
     return cfg
 
 
@@ -1063,6 +1112,7 @@ class Config:
         self.network_attributes, self.attribute_rows = {}, []
         self.tier_rows, self.tier_settings = [], {}
         self.controllers, self.controller_rows, self.exceptions = {}, [], set()
+        self.attribute_rules = []
         for r in assets:
             k = (r["class_name"], r["ag_code"])
             self.cats[k] = set((r.get("categories") or "").split())
@@ -1271,6 +1321,9 @@ def upgrade_network(path, classes):
     ds = open_ds(path, update=True)
     added = 0
     try:
+        ntype = {
+            r["key"]: r["value"] for r in _read_rows(ds, "un_network")
+        }.get("network_type")
         for cls in classes.values():
             lyr = ds.GetLayerByName(cls)
             if lyr is None:
@@ -1284,6 +1337,10 @@ def upgrade_network(path, classes):
             wanted = list(TRACKING_FIELDS) + (
                 list(ASSET_FIELDS) if role in ("Device", "Line") else []
             )
+            if ntype in HYDRAULIC and role == "Line":
+                wanted.append(("roughness", ogr.OFTReal, 0))
+            if ntype in HYDRAULIC and role == "Device":
+                wanted += HYDRAULIC_DEVICE
             for name, ftype, width in wanted:
                 if name not in have:
                     fd = ogr.FieldDefn(name, ftype)
